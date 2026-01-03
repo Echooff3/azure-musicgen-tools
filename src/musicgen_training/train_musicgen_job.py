@@ -197,13 +197,7 @@ def train_musicgen_lora(
             logger.warning(f"For drum mode, consider using lora_rank >= 16 (currently {lora_rank})")
         if learning_rate > 1e-4:
             logger.warning(f"For drum mode, consider using learning_rate <= 1e-4 (currently {learning_rate})")
-        learning_rate: Learning rate
-        num_epochs: Number of training epochs
-        batch_size: Batch size for training
-        gradient_accumulation_steps: Gradient accumulation steps
-        save_steps: Save checkpoint every N steps
-        logging_steps: Log every N steps
-    """
+    
     logger.info(f"Loading model: {model_name}")
     
     # Load model and processor

@@ -1,4 +1,4 @@
-# Azure MusicGen Tools - ARM Template Deployment
+REM Azure MusicGen Tools - ARM Template Deployment
 
 @echo off
 setlocal enabledelayedexpansion
