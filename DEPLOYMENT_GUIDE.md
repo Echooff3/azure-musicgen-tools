@@ -57,10 +57,14 @@ arm-templates\deploy.bat
 - Storage Account with 3 blob containers
 - Azure ML Workspace
 - CPU Compute Cluster (for loop extraction)
-- GPU Compute Cluster (for training)
+- GPU Compute Cluster (optional - see note below)
 - Container Registry
 - Key Vault
 - Application Insights
+
+> **⚠️ GPU Note**: GPU compute is **disabled by default** because most Azure subscriptions start with zero GPU quota. 
+> The deployment will complete successfully without GPU. You can add GPU later when you're ready for model training.
+> See the [GPU Setup Guide](GPU_SETUP.md) for instructions.
 
 ### C. Verify Deployment
 

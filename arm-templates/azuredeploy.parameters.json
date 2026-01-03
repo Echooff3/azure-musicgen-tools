@@ -28,6 +28,9 @@
     },
     "gpuComputeMaxNodes": {
       "value": 2
+    },
+    "deployGpuCompute": {
+      "value": false
     }
   }
 }
