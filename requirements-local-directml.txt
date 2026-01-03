@@ -1,0 +1,22 @@
+# Local training requirements with DirectML support
+# Use this for Intel Arc GPU training on Windows
+
+# Audio processing
+librosa>=0.10.0
+soundfile>=0.12.1
+audioread>=3.0.0
+
+# DirectML PyTorch (replaces standard torch)
+torch-directml
+
+# Machine Learning (without audiocraft - not needed for local training)
+transformers>=4.35.0
+peft>=0.7.0
+accelerate>=0.25.0
+
+# Utilities
+numpy>=1.24.0
+scipy>=1.10.0
+tqdm>=4.65.0
+pyyaml>=6.0
+python-dotenv>=1.0.0
