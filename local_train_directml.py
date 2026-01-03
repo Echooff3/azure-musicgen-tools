@@ -114,12 +114,10 @@ class AudioLoopDataset(Dataset):
             else:
                 waveform_np = waveform_np[:self.max_length]
             
-            # Convert to tensor
-            waveform = torch.from_numpy(waveform_np).unsqueeze(0).float()
-            
-            # Process with MusicGen processor
+            # Convert to tensor - processor expects raw numpy array or 1D tensor
+            # Don't add batch dimension, let processor handle it
             inputs = self.processor(
-                audio=waveform,
+                audio=waveform_np,
                 sampling_rate=self.target_sample_rate,
                 return_tensors="pt",
             )
