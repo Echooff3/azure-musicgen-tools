@@ -3,7 +3,7 @@ Submit Azure ML job for loop extraction.
 """
 import os
 from azure.ai.ml import MLClient, command
-from azure.ai.ml.entities import Environment, ManagedIdentityConfiguration
+from azure.ai.ml.entities import Environment
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 
@@ -14,7 +14,7 @@ load_dotenv()
 SUBSCRIPTION_ID = os.getenv('AZURE_SUBSCRIPTION_ID')
 RESOURCE_GROUP = os.getenv('AZURE_RESOURCE_GROUP')
 WORKSPACE_NAME = os.getenv('AZURE_WORKSPACE_NAME')
-STORAGE_ACCOUNT_NAME = os.getenv('AZURE_STORAGE_ACCOUNT_NAME')
+CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
 
 # Job parameters
 INPUT_CONTAINER = os.getenv('INPUT_CONTAINER_NAME', 'audio-input')
@@ -40,19 +40,18 @@ environment = Environment(
 # Create the command job
 job = command(
     code="./src",
-    command="python loop_extraction/extract_loops_job.py --input-container $INPUT_CONTAINER --output-container $OUTPUT_CONTAINER --storage-account $STORAGE_ACCOUNT --bars $BARS --bpm $BPM",
+    command="python loop_extraction/extract_loops_job.py --input-container $INPUT_CONTAINER --output-container $OUTPUT_CONTAINER --bars $BARS --bpm $BPM",
     environment=environment,
-    compute="cpu-cluster",  # Update with your compute cluster name
+    compute="cpu-cluster",
     environment_variables={
         "INPUT_CONTAINER": INPUT_CONTAINER,
         "OUTPUT_CONTAINER": OUTPUT_CONTAINER,
-        "STORAGE_ACCOUNT": STORAGE_ACCOUNT_NAME,
+        "AZURE_STORAGE_CONNECTION_STRING": CONNECTION_STRING,
         "BARS": "4",
         "BPM": "120.0",
     },
     display_name="Extract Audio Loops",
     description="Extract 4-bar loops from audio files in blob storage",
-    identity=ManagedIdentityConfiguration()
 )
 
 # Submit the job

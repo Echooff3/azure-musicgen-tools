@@ -178,17 +178,12 @@ def main():
     args = parser.parse_args()
     
     # Get connection string from args or environment
-    # If storage account is provided, use managed identity
-    if args.storage_account:
-        storage_account = args.storage_account or os.getenv('STORAGE_ACCOUNT')
-        connection_string = f"DefaultEndpointsProtocol=https;AccountName={storage_account};AccountKey=;BlobEndpoint=https://{storage_account}.blob.core.windows.net/"
-        logger.info(f"Using managed identity for storage account: {storage_account}")
-    else:
-        connection_string = args.connection_string or os.getenv('AZURE_STORAGE_CONNECTION_STRING')
-        if not connection_string:
-            logger.error("Azure Storage connection string or storage account name not provided")
-            sys.exit(1)
-        logger.info("Using connection string authentication")
+    connection_string = args.connection_string or os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+    if not connection_string:
+        logger.error("Azure Storage connection string not provided")
+        sys.exit(1)
+    
+    logger.info("Using connection string authentication")
     
     try:
         process_audio_files(

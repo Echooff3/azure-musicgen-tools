@@ -21,36 +21,13 @@ class AzureBlobManager:
             connection_string: Azure Storage connection string. 
                              If None, reads from environment variable.
         """
-        from azure.identity import DefaultAzureCredential
-        
         self.connection_string = connection_string or os.getenv('AZURE_STORAGE_CONNECTION_STRING')
         if not self.connection_string:
             raise ValueError("Azure Storage connection string not provided")
         
-        # Check if using managed identity (connection string without AccountKey)
-        if 'AccountKey=;' in self.connection_string or 'AccountKey=' not in self.connection_string:
-            # Extract account name from connection string
-            parts = self.connection_string.split(';')
-            account_name = None
-            for part in parts:
-                if part.startswith('AccountName='):
-                    account_name = part.split('=')[1]
-                    break
-            
-            if account_name:
-                logger.info(f"Using managed identity for storage account: {account_name}")
-                account_url = f"https://{account_name}.blob.core.windows.net"
-                self.blob_service_client = BlobServiceClient(
-                    account_url=account_url,
-                    credential=DefaultAzureCredential()
-                )
-            else:
-                raise ValueError("Invalid connection string format")
-        else:
-            # Use connection string authentication
-            self.blob_service_client = BlobServiceClient.from_connection_string(
-                self.connection_string
-            )
+        self.blob_service_client = BlobServiceClient.from_connection_string(
+            self.connection_string
+        )
     
     def get_container_client(self, container_name: str) -> ContainerClient:
         """Get a container client, creating the container if it doesn't exist."""
