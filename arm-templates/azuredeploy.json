@@ -74,7 +74,7 @@
   },
   "variables": {
     "storageAccountName": "[concat(parameters('projectName'), 'st', substring(uniqueString(resourceGroup().id), 0, 11))]",
-    "keyVaultName": "[concat(parameters('projectName'), '-kv-', uniqueString(resourceGroup().id))]",
+    "keyVaultName": "[concat(parameters('projectName'), '-kv', substring(uniqueString(resourceGroup().id), 0, 11))]",
     "applicationInsightsName": "[concat(parameters('projectName'), '-appinsights')]",
     "containerRegistryName": "[concat(parameters('projectName'), 'acr', substring(uniqueString(resourceGroup().id), 0, 11))]",
     "workspaceName": "[concat(parameters('projectName'), '-ml-workspace')]",
