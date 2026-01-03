@@ -122,17 +122,35 @@ class AudioLoopDataset(Dataset):
                 return_tensors="pt",
             )
             
+            # Generate text inputs for conditioning (empty string for unconditional)
+            text_inputs = self.processor.tokenizer(
+                "drum loop",  # Generic description for drum training
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            )
+            
             return {
                 'input_values': inputs['input_values'].squeeze(0),
-                'padding_mask': inputs.get('padding_mask', torch.ones(inputs['input_values'].shape[1])).squeeze(0)
+                'padding_mask': inputs.get('padding_mask', torch.ones(inputs['input_values'].shape[1])).squeeze(0),
+                'input_ids': text_inputs['input_ids'].squeeze(0),
+                'attention_mask': text_inputs['attention_mask'].squeeze(0)
             }
         
         except Exception as e:
             logger.error(f"Error loading {audio_path}: {e}")
             # Return a zero tensor as fallback
+            text_inputs = self.processor.tokenizer(
+                "drum loop",
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            )
             return {
                 'input_values': torch.zeros(1, self.max_length),
-                'padding_mask': torch.zeros(self.max_length)
+                'padding_mask': torch.zeros(self.max_length),
+                'input_ids': text_inputs['input_ids'].squeeze(0),
+                'attention_mask': text_inputs['attention_mask'].squeeze(0)
             }
 
 
@@ -241,9 +259,16 @@ def train_epoch(model, dataloader, optimizer, device, epoch, total_epochs):
     for batch_idx, batch in enumerate(progress_bar):
         # Move batch to device
         input_values = batch['input_values'].to(device)
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
         
-        # Forward pass
-        outputs = model(input_values=input_values, labels=input_values)
+        # Forward pass with text conditioning
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            input_values=input_values,
+            labels=input_values
+        )
         loss = outputs.loss
         
         # Backward pass
