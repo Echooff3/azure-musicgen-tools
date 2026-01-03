@@ -27,7 +27,7 @@ The ARM template creates the following resources:
 
 ## 🚀 Quick Deployment
 
-### Option 1: Using Azure Portal
+### Option 1: Using Azure Portal (Deploy to Azure Button)
 
 1. Click the button below to deploy directly from the Azure Portal:
 
@@ -42,7 +42,31 @@ The ARM template creates the following resources:
 
 3. Click "Review + Create" then "Create"
 
-### Option 2: Using Azure CLI (Bash/Linux/Mac)
+**If you encounter an error** about downloading the template, use **Option 1b** below.
+
+### Option 1b: Manual Portal Deployment (If Button Fails)
+
+If the Deploy to Azure button fails with an error message like "There was an error downloading the template from URI", follow these steps:
+
+1. **Copy the template content**:
+   - Open [azuredeploy.json](https://raw.githubusercontent.com/Echooff3/azure-musicgen-tools/main/arm-templates/azuredeploy.json) in your browser
+   - Select all (Ctrl+A / Cmd+A) and copy the entire JSON content
+
+2. **Create custom deployment in Azure Portal**:
+   - Go to https://portal.azure.com
+   - Search for "Deploy a custom template" or go to https://portal.azure.com/#create/Microsoft.Template
+   - Click "Build your own template in the editor"
+   - Delete the example template
+   - Paste the copied JSON content
+   - Click "Save"
+
+3. **Fill in parameters** as described in Option 1 above
+
+4. **Deploy**: Click "Review + Create" then "Create"
+
+> **Note**: This error can occur because GitHub serves raw files with `Content-Type: text/plain` instead of `application/json`. The manual method works around this limitation.
+
+### Option 2: Using Azure CLI (Bash/Linux/Mac) - Recommended
 
 ```bash
 # Make the script executable
@@ -88,6 +112,22 @@ az deployment group create \
     --parameters arm-templates/azuredeploy.parameters.json \
     --parameters projectName=$PROJECT_NAME location=$LOCATION
 ```
+
+## ✅ Template Validation
+
+Before deploying, you can validate the ARM template:
+
+```bash
+# Validate template syntax and structure
+python3 arm-templates/validate-template.py
+```
+
+This will check:
+- ✅ Valid JSON syntax
+- ✅ Correct ARM template structure
+- ✅ Resource definitions
+- ✅ API versions
+- ✅ File integrity
 
 ## ⚙️ Configuration Parameters
 
@@ -233,6 +273,29 @@ az group delete \
 💡 **Tip**: For development, use smaller VMs and increase for production workloads.
 
 ## 🐛 Troubleshooting
+
+### Deploy to Azure Button - Template Download Error
+
+```
+Error: There was an error downloading the template from URI 'https://raw.githubusercontent.com/...'
+Ensure that the template is publicly accessible and that the publisher has enabled CORS policy...
+```
+
+**Root Cause**: This occurs because GitHub serves raw files with `Content-Type: text/plain` instead of `application/json`, which can cause Azure Portal to reject the template.
+
+**Solutions** (in order of recommendation):
+
+1. **Use the CLI deployment** (Option 2 above) - Most reliable:
+   ```bash
+   ./arm-templates/deploy.sh
+   ```
+
+2. **Use manual portal deployment** (Option 1b above):
+   - Copy the [template JSON](https://raw.githubusercontent.com/Echooff3/azure-musicgen-tools/main/arm-templates/azuredeploy.json)
+   - Go to Azure Portal → "Deploy a custom template" → "Build your own template"
+   - Paste the JSON and deploy
+
+3. **Try the button again** - Sometimes it works intermittently
 
 ### Deployment Fails - Quota Exceeded
 
