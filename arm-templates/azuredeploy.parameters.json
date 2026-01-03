@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "projectName": {
+      "value": "musicgen"
+    },
+    "location": {
+      "value": "eastus"
+    },
+    "storageAccountType": {
+      "value": "Standard_LRS"
+    },
+    "cpuComputeVmSize": {
+      "value": "Standard_DS3_v2"
+    },
+    "cpuComputeMinNodes": {
+      "value": 0
+    },
+    "cpuComputeMaxNodes": {
+      "value": 4
+    },
+    "gpuComputeVmSize": {
+      "value": "Standard_NC6s_v3"
+    },
+    "gpuComputeMinNodes": {
+      "value": 0
+    },
+    "gpuComputeMaxNodes": {
+      "value": 2
+    }
+  }
+}
