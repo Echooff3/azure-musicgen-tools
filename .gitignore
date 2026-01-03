@@ -146,3 +146,4 @@ logs/
 tmp/
 temp/
 *.tmp
+musicgen/
