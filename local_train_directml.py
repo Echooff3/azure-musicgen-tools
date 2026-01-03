@@ -9,6 +9,8 @@ import logging
 from pathlib import Path
 from typing import List
 import json
+import subprocess
+import shutil
 
 import torch
 import torch_directml
@@ -148,6 +150,90 @@ def collect_audio_files(input_folder: Path) -> List[Path]:
     return audio_files
 
 
+def preprocess_audio_files_to_mono(audio_files: List[Path], ffmpeg_path: str = "ffmpeg") -> List[Path]:
+    """Convert all audio files to mono using ffmpeg."""
+    logger.info("=" * 80)
+    logger.info("Preprocessing audio files to mono format")
+    logger.info("=" * 80)
+    
+    processed_files = []
+    failed_files = []
+    
+    for audio_file in tqdm(audio_files, desc="Converting to mono"):
+        try:
+            # Check if file is already mono using ffprobe
+            probe_cmd = [
+                ffmpeg_path.replace('ffmpeg.exe', 'ffprobe.exe').replace('ffmpeg', 'ffprobe'),
+                '-v', 'error',
+                '-select_streams', 'a:0',
+                '-show_entries', 'stream=channels',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                str(audio_file)
+            ]
+            
+            result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+            channels = int(result.stdout.strip()) if result.stdout.strip() else 0
+            
+            if channels == 1:
+                logger.debug(f"✓ {audio_file.name} is already mono")
+                processed_files.append(audio_file)
+                continue
+            
+            # Create backup path
+            backup_path = audio_file.with_suffix(audio_file.suffix + '.backup')
+            
+            # Create temp output path
+            temp_output = audio_file.with_suffix('.temp' + audio_file.suffix)
+            
+            # Convert to mono using ffmpeg
+            ffmpeg_cmd = [
+                ffmpeg_path,
+                '-i', str(audio_file),
+                '-ac', '1',  # Convert to mono
+                '-ar', '32000',  # Resample to 32kHz
+                '-y',  # Overwrite output file
+                str(temp_output)
+            ]
+            
+            result = subprocess.run(
+                ffmpeg_cmd,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            if result.returncode == 0 and temp_output.exists():
+                # Backup original file
+                if not backup_path.exists():
+                    shutil.copy2(audio_file, backup_path)
+                
+                # Replace original with converted file
+                shutil.move(str(temp_output), str(audio_file))
+                logger.info(f"✓ Converted {audio_file.name} from {channels} channels to mono")
+                processed_files.append(audio_file)
+            else:
+                logger.error(f"Failed to convert {audio_file.name}: {result.stderr}")
+                failed_files.append(audio_file)
+                if temp_output.exists():
+                    temp_output.unlink()
+                    
+        except subprocess.TimeoutExpired:
+            logger.error(f"Timeout converting {audio_file.name}")
+            failed_files.append(audio_file)
+        except Exception as e:
+            logger.error(f"Error processing {audio_file.name}: {e}")
+            failed_files.append(audio_file)
+    
+    logger.info("\n" + "=" * 80)
+    logger.info(f"✓ Preprocessing complete: {len(processed_files)} successful, {len(failed_files)} failed")
+    logger.info("=" * 80 + "\n")
+    
+    if failed_files:
+        logger.warning(f"Failed files: {[f.name for f in failed_files]}")
+    
+    return processed_files
+
+
 def train_epoch(model, dataloader, optimizer, device, epoch, total_epochs):
     """Train for one epoch."""
     model.train()
@@ -189,6 +275,10 @@ def main():
     parser.add_argument('--drum-mode', action='store_true', help='Enable drum isolation')
     parser.add_argument('--enhance-percussion', action='store_true', help='Enhance percussion transients')
     parser.add_argument('--max-duration', type=float, default=30.0, help='Max audio duration in seconds')
+    parser.add_argument('--ffmpeg-path', type=str, default=r'C:\ProgramData\chocolatey\bin\ffmpeg.exe',
+                        help='Path to ffmpeg executable')
+    parser.add_argument('--skip-preprocessing', action='store_true', 
+                        help='Skip audio preprocessing (assume files are already mono)')
     
     args = parser.parse_args()
     
@@ -243,6 +333,15 @@ def main():
     if not audio_files:
         logger.error(f"No audio files found in {input_folder}")
         return
+    
+    # Preprocess audio files to mono format
+    if not args.skip_preprocessing:
+        audio_files = preprocess_audio_files_to_mono(audio_files, args.ffmpeg_path)
+        if not audio_files:
+            logger.error("No audio files available after preprocessing")
+            return
+    else:
+        logger.warning("Skipping audio preprocessing - assuming files are already in correct format")
     
     # Create dataset and dataloader
     logger.info("\nCreating dataset...")

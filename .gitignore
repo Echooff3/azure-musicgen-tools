@@ -134,6 +134,7 @@ logs/
 *.flac
 *.ogg
 *.m4a
+audio_loops/
 
 # Model files
 *.pt
