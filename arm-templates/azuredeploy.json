@@ -73,10 +73,10 @@
     }
   },
   "variables": {
-    "storageAccountName": "[concat(parameters('projectName'), 'storage', uniqueString(resourceGroup().id))]",
+    "storageAccountName": "[concat(parameters('projectName'), 'st', substring(uniqueString(resourceGroup().id), 0, 11))]",
     "keyVaultName": "[concat(parameters('projectName'), '-kv-', uniqueString(resourceGroup().id))]",
     "applicationInsightsName": "[concat(parameters('projectName'), '-appinsights')]",
-    "containerRegistryName": "[concat(parameters('projectName'), 'acr', uniqueString(resourceGroup().id))]",
+    "containerRegistryName": "[concat(parameters('projectName'), 'acr', substring(uniqueString(resourceGroup().id), 0, 11))]",
     "workspaceName": "[concat(parameters('projectName'), '-ml-workspace')]",
     "cpuComputeName": "cpu-cluster",
     "gpuComputeName": "gpu-cluster",
