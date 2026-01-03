@@ -34,7 +34,9 @@ Click here to deploy all Azure resources:
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FEchooff3%2Fazure-musicgen-tools%2Fmain%2Farm-templates%2Fazuredeploy.json)
 
-### Option 2: Using Deployment Scripts
+> **⚠️ Button Not Working?** If you see a "template download error", see the **[Quick Fix Guide](arm-templates/DEPLOY_FIX.md)** or use Option 2 below.
+
+### Option 2: Using Deployment Scripts (Recommended)
 
 **Linux/Mac:**
 ```bash
@@ -55,7 +57,8 @@ The deployment script will:
 
 **Deployment time**: ~10-15 minutes
 
-For detailed deployment options and cost optimization, see [ARM Templates Guide](arm-templates/README.md).
+For detailed deployment options, manual deployment instructions, and troubleshooting, see [ARM Templates Guide](arm-templates/README.md).
+
 
 ## Installation
 
