@@ -257,10 +257,10 @@ def train_epoch(model, dataloader, optimizer, device, epoch, total_epochs):
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}/{total_epochs}")
     
     for batch_idx, batch in enumerate(progress_bar):
-        # Move batch to device
-        input_values = batch['input_values'].to(device)
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
+        # Move batch to device and ensure float32
+        input_values = batch['input_values'].to(device).float()
+        input_ids = batch['input_ids'].to(device).long()
+        attention_mask = batch['attention_mask'].to(device).long()
         
         # Forward pass with text conditioning
         outputs = model(
@@ -330,7 +330,7 @@ def main():
     processor = AutoProcessor.from_pretrained(args.model_name)
     model = MusicgenForConditionalGeneration.from_pretrained(
         args.model_name,
-        torch_dtype=torch.float32  # DirectML works best with FP32
+        dtype=torch.float32  # Use float32 for DirectML compatibility
     )
     logger.info("✓ Model loaded")
     
@@ -349,6 +349,7 @@ def main():
     # Move model to DirectML device
     logger.info("\nMoving model to DirectML device...")
     model = model.to(device)
+    model = model.float()  # Explicitly ensure float32
     logger.info("✓ Model on DirectML device")
     
     # Collect audio files
