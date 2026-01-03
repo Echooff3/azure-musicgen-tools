@@ -80,6 +80,104 @@ pip install -r requirements.txt
 3. Your `.env` file is already created by the deployment script!
    - If deploying manually, copy `.env.template` to `.env` and configure
 
+## GPU Configuration & SKU Selection
+
+### Available GPU SKUs in East US
+
+For MusicGen training, you'll need a GPU compute cluster. Here are the available options:
+
+| SKU | vCPUs | RAM | GPU | Cost/hr | Training Time* | Total Cost* | Recommended |
+|-----|-------|-----|-----|---------|----------------|-------------|-------------|
+| **Standard_NC4as_T4_v3** | 4 | 28 GB | 1x T4 | **$0.526** | 8-10 hrs | **$4-5** | 💰 Best Budget |
+| **Standard_NC6s_v3** | 6 | 112 GB | 1x V100 | $3.06 | 2-3 hrs | $6-9 | ⭐ Best Balance |
+| **Standard_NC8as_T4_v3** | 8 | 56 GB | 1x T4 | $0.702 | 8-10 hrs | $5-7 | Similar to NC4as |
+| **Standard_NC12s_v3** | 12 | 224 GB | 2x V100 | $6.12 | 1.5-2 hrs | $9-12 | ⚡ Fast Training |
+| **Standard_NC24ads_A100_v4** | 24 | 220 GB | 1x A100 | $3.67 | 1.5-2 hrs | $5-7 | 🚀 High Performance |
+
+\* Based on 10 epochs, batch size 4, MusicGen-small model
+
+**Not Recommended**: NC16as_T4_v3, NC24s_v3, NC64as_T4_v3, NC96ads_A100_v4, NC80adis_H100_v5 (wasteful for MusicGen-small)
+
+### Quick Recommendations
+
+**For Budget / Learning:**
+```json
+"gpuComputeVmSize": {"value": "Standard_NC4as_T4_v3"}
+```
+- **Cost**: ~$4-5 per training run
+- **Quota needed**: "Standard NCasT4_v3 Family vCPUs" = 4
+- **Best for**: First-time training, experimentation
+
+**For Production:**
+```json
+"gpuComputeVmSize": {"value": "Standard_NC6s_v3"}
+```
+- **Cost**: ~$6-9 per training run
+- **Quota needed**: "Standard NCSv3 Family vCPUs" = 6
+- **Best for**: Regular training, faster iteration
+
+### Requesting GPU Quota
+
+By default, GPU quota is 0. To check and request:
+
+```bash
+# Check current quota
+az vm list-usage --location eastus --query "[?contains(name.localizedValue, 'NC')]" -o table
+
+# Request quota via Azure Portal:
+# 1. Go to portal.azure.com → Subscriptions → Usage + quotas
+# 2. Search for your desired SKU family (e.g., "NCasT4_v3" or "NCSv3")
+# 3. Click "Request increase" and enter 4-12 vCPUs
+# 4. Wait 1-2 business days for approval
+```
+
+### Changing GPU SKU
+
+Edit `arm-templates/azuredeploy.parameters.json`:
+
+```json
+"gpuComputeVmSize": {
+  "value": "Standard_NC4as_T4_v3"  // Change to your preferred SKU
+}
+```
+
+Then redeploy or manually create the compute cluster:
+
+```bash
+az ml compute create \
+    --name gpu-cluster \
+    --type AmlCompute \
+    --size Standard_NC4as_T4_v3 \
+    --min-instances 0 \
+    --max-instances 2 \
+    --resource-group rg-mg3 \
+    --workspace-name musicgen-ml-workspace
+```
+
+### Cost Saving: Spot Instances (90% Discount!)
+
+For non-critical training, use spot instances:
+
+```bash
+az ml compute create \
+    --name gpu-cluster-spot \
+    --type AmlCompute \
+    --size Standard_NC4as_T4_v3 \
+    --tier spot \
+    --min-instances 0 \
+    --max-instances 2 \
+    --resource-group rg-mg3 \
+    --workspace-name musicgen-ml-workspace
+```
+
+**Spot Pricing:**
+- NC4as_T4_v3: $0.053/hr (was $0.526/hr) 
+- NC6s_v3: $0.306/hr (was $3.06/hr)
+
+**Trade-off**: May be evicted when Azure needs capacity.
+
+For a complete GPU SKU reference with all available options, quota families, and architecture details, see [GPU SKU Reference](arm-templates/GPU_SKU_REFERENCE.md).
+
 ## Project Structure
 
 ```
