@@ -135,7 +135,7 @@ Edit `azuredeploy.parameters.json` to customize:
 
 | Parameter | Default | Description | Cost Impact |
 |-----------|---------|-------------|-------------|
-| `projectName` | musicgen | Prefix for resource names | None |
+| `projectName` | musicgen | Prefix for resource names (max 10 chars) | None |
 | `location` | eastus | Azure region | Varies by region |
 | `storageAccountType` | Standard_LRS | Storage redundancy | LRS is cheapest |
 | `cpuComputeVmSize` | Standard_DS3_v2 | CPU cluster VM size | ~$0.19/hr per node |
@@ -144,6 +144,25 @@ Edit `azuredeploy.parameters.json` to customize:
 | `gpuComputeVmSize` | Standard_NC6s_v3 | GPU cluster VM size | ~$3.06/hr per node |
 | `gpuComputeMinNodes` | 0 | Min GPU nodes (0 = auto-scale down) | 0 = no idle cost |
 | `gpuComputeMaxNodes` | 2 | Max GPU nodes | Caps maximum cost |
+
+### Resource Naming Convention
+
+The template generates unique names for Azure resources:
+
+- **Storage Account**: `{projectName}st{uniqueId}` 
+  - Example: `musicgenstc24d4d3b5bb`
+  - Must be 3-24 characters, lowercase letters and numbers only
+  - The `uniqueId` is 11 characters derived from the resource group ID
+  
+- **Container Registry**: `{projectName}acr{uniqueId}`
+  - Example: `musicgenacrc24d4d3b5bb`
+  - Must be 5-50 characters, alphanumeric only
+  - Uses the same 11-character `uniqueId` for consistency
+
+- **Key Vault**: `{projectName}-kv-{uniqueId}`
+- **ML Workspace**: `{projectName}-ml-workspace`
+
+**Important**: Keep `projectName` to 10 characters or less to ensure all generated names comply with Azure naming restrictions.
 
 ### Cost Optimization Tips
 
