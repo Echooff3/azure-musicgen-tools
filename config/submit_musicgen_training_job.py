@@ -43,7 +43,7 @@ job = command(
     code="./src",
     command="python musicgen_training/train_musicgen_job.py --input-container ${{inputs.input_container}} --output-container ${{inputs.output_container}} --connection-string ${{inputs.connection_string}} --model-name ${{inputs.model_name}} --lora-rank ${{inputs.lora_rank}} --lora-alpha ${{inputs.lora_alpha}} --learning-rate ${{inputs.learning_rate}} --num-epochs ${{inputs.num_epochs}} --batch-size ${{inputs.batch_size}} --export-hf",
     environment=environment,
-    compute="gpu-cluster",  # Update with your GPU compute cluster name
+    compute="gpu-cluster",  # NOTE: GPU cluster must be set up first. See GPU_SETUP.md if not yet created.
     inputs={
         "input_container": Input(type="string", default=INPUT_CONTAINER),
         "output_container": Input(type="string", default=OUTPUT_CONTAINER),

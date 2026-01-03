@@ -88,6 +88,7 @@ for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" -
 for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.outputs.workspaceName.value -o tsv') do set WORKSPACE_NAME=%%i
 for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.outputs.cpuComputeCluster.value -o tsv') do set CPU_CLUSTER=%%i
 for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.outputs.gpuComputeCluster.value -o tsv') do set GPU_CLUSTER=%%i
+for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.parameters.deployGpuCompute.value -o tsv') do set GPU_DEPLOYED=%%i
 
 echo.
 echo ==========================================
@@ -98,7 +99,11 @@ echo Location:              %LOCATION%
 echo Storage Account:       %STORAGE_ACCOUNT%
 echo ML Workspace:          %WORKSPACE_NAME%
 echo CPU Compute Cluster:   %CPU_CLUSTER%
-echo GPU Compute Cluster:   %GPU_CLUSTER%
+if "%GPU_DEPLOYED%"=="true" (
+    echo GPU Compute Cluster:   %GPU_CLUSTER% (deployed)
+) else (
+    echo GPU Compute Cluster:   Not deployed (see GPU_SETUP.md to add later)
+)
 echo.
 echo Blob Containers created:
 echo   - audio-input        (upload your audio files here)
@@ -160,8 +165,14 @@ echo.
 echo 2. Extract audio loops:
 echo    python config\submit_loop_extraction_job.py
 echo.
-echo 3. Train MusicGen model:
-echo    python config\submit_musicgen_training_job.py
+if "%GPU_DEPLOYED%"=="true" (
+    echo 3. Train MusicGen model:
+    echo    python config\submit_musicgen_training_job.py
+) else (
+    echo 3. Set up GPU compute (required for model training):
+    echo    See GPU_SETUP.md for instructions
+    echo    Then: python config\submit_musicgen_training_job.py
+)
 echo.
 echo 4. Deploy model for inference:
 echo    python config\deploy_to_azureml.py ^
