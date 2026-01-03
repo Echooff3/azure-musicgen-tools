@@ -70,6 +70,13 @@
       "metadata": {
         "description": "Maximum nodes for GPU cluster"
       }
+    },
+    "deployGpuCompute": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy GPU compute cluster (requires GPU quota). Set to false if you don't have GPU quota or want to add it later."
+      }
     }
   },
   "variables": {
@@ -248,6 +255,7 @@
       "apiVersion": "2023-04-01",
       "name": "[concat(variables('workspaceName'), '/', variables('gpuComputeName'))]",
       "location": "[parameters('location')]",
+      "condition": "[parameters('deployGpuCompute')]",
       "dependsOn": [
         "[resourceId('Microsoft.MachineLearningServices/workspaces', variables('workspaceName'))]"
       ],

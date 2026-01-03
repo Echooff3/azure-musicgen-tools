@@ -24,6 +24,8 @@ A comprehensive toolkit for extracting audio loops and fine-tuning Facebook's Mu
 - Azure CLI installed (for deployment)
 - Python 3.10+
 
+**Note on GPU**: The deployment creates a CPU compute cluster by default. GPU compute (required for model training) is optional and requires GPU quota approval. See the [GPU Setup Guide](arm-templates/README.md#gpu-compute-configuration) for details.
+
 **That's it!** The ARM template will create all necessary Azure resources for you.
 
 ## Quick Start - Deploy Infrastructure
@@ -390,16 +392,22 @@ job = command(
 
 ### Common Issues
 
-1. **Out of Memory during training**:
+1. **GPU Deployment Error** (`Failed` status when creating compute):
+   - **Solution**: GPU is now optional in the deployment. By default, only CPU compute is created.
+   - **To add GPU later**: Follow the [GPU Setup Guide](arm-templates/README.md#gpu-compute-configuration)
+   - **Root cause**: Most Azure subscriptions start with zero GPU quota
+   - See detailed fix in [ARM Templates Troubleshooting](arm-templates/README.md#gpu-compute-creation-failed)
+
+2. **Out of Memory during training**:
    - Reduce `--batch-size`
    - Increase `gradient_accumulation_steps`
    - Use a smaller model variant
 
-2. **Tempo detection fails**:
+3. **Tempo detection fails**:
    - Use `--no-auto-tempo` and specify `--bpm` manually
    - Check audio quality and format
 
-3. **Azure authentication errors**:
+4. **Azure authentication errors**:
    - Run `az login` if using Azure CLI
    - Check your service principal credentials
    - Verify RBAC permissions on storage and ML workspace

@@ -141,9 +141,57 @@ Edit `azuredeploy.parameters.json` to customize:
 | `cpuComputeVmSize` | Standard_DS3_v2 | CPU cluster VM size | ~$0.19/hr per node |
 | `cpuComputeMinNodes` | 0 | Min CPU nodes (0 = auto-scale down) | 0 = no idle cost |
 | `cpuComputeMaxNodes` | 4 | Max CPU nodes | Caps maximum cost |
+| `deployGpuCompute` | false | Deploy GPU cluster (requires quota) | See GPU section below |
 | `gpuComputeVmSize` | Standard_NC6s_v3 | GPU cluster VM size | ~$3.06/hr per node |
 | `gpuComputeMinNodes` | 0 | Min GPU nodes (0 = auto-scale down) | 0 = no idle cost |
 | `gpuComputeMaxNodes` | 2 | Max GPU nodes | Caps maximum cost |
+
+### GPU Compute Configuration
+
+⚠️ **Important**: GPU compute is **disabled by default** (`deployGpuCompute: false`) because most Azure subscriptions start with **zero GPU quota**.
+
+**Why GPU is optional:**
+- Many Azure subscriptions (especially new ones) have 0 GPU quota by default
+- GPU SKUs may not be available in all regions
+- Deployment will fail if GPU quota is not available
+
+**To enable GPU compute:**
+
+1. **First, request GPU quota increase:**
+   ```bash
+   # Check current GPU quota
+   az vm list-usage --location eastus --output table | grep -i "NC"
+   
+   # Request quota increase in Azure Portal:
+   # Subscriptions > Usage + quotas > Search for "NC" > Request increase
+   ```
+
+2. **Then enable GPU in parameters:**
+   ```json
+   {
+     "deployGpuCompute": {
+       "value": true
+     }
+   }
+   ```
+
+3. **Or add GPU compute later:**
+   ```bash
+   # After initial deployment, add GPU compute cluster manually
+   az ml compute create \
+     --name gpu-cluster \
+     --type AmlCompute \
+     --size Standard_NC6s_v3 \
+     --min-instances 0 \
+     --max-instances 2 \
+     --resource-group musicgen-rg \
+     --workspace-name musicgen-ml-workspace
+   ```
+
+**You can still use the toolkit without GPU:**
+- Loop extraction runs on CPU cluster ✅
+- Model training requires GPU (can be added later) ⏱️
+- Inference can run on CPU ✅
 
 ### Resource Naming Convention
 
@@ -291,7 +339,57 @@ az group delete \
 
 💡 **Tip**: For development, use smaller VMs and increase for production workloads.
 
+**Note**: With `deployGpuCompute: false` (default), GPU compute is not created, saving ~$24.50/month in potential costs until you're ready to add it.
+
 ## 🐛 Troubleshooting
+
+### GPU Compute Creation Failed
+
+```
+Error: {
+    "status": "Failed",
+    "error": {}
+}
+when creating Microsoft.MachineLearningServices/workspaces/computes
+```
+
+**Root Cause**: This error occurs when trying to deploy GPU compute without sufficient GPU quota or in regions where the GPU SKU is unavailable.
+
+**Solution**: The template now has `deployGpuCompute` set to `false` by default to avoid this issue.
+
+**If you need GPU compute:**
+
+1. **Check your GPU quota:**
+   ```bash
+   az vm list-usage --location eastus --output table | grep -i "Standard NC"
+   ```
+
+2. **Request quota increase:**
+   - Go to Azure Portal → Subscriptions → Usage + quotas
+   - Search for "Standard NCSv3 Family vCPUs" or your desired GPU family
+   - Click the quota name → Request increase
+   - Enter desired quota (minimum 6 vCPUs for 1 NC6s_v3 VM)
+   - Wait for approval (usually 1-2 business days)
+
+3. **Verify GPU availability in your region:**
+   ```bash
+   az vm list-skus --location eastus --size Standard_NC --output table
+   ```
+   If the SKU shows `NotAvailableForSubscription`, try a different region or SKU.
+
+4. **After quota is approved, add GPU compute:**
+   - Option A: Update `deployGpuCompute` to `true` in parameters and redeploy
+   - Option B: Add manually via Azure CLI:
+     ```bash
+     az ml compute create \
+       --name gpu-cluster \
+       --type AmlCompute \
+       --size Standard_NC6s_v3 \
+       --min-instances 0 \
+       --max-instances 2 \
+       --resource-group musicgen-rg \
+       --workspace-name musicgen-ml-workspace
+     ```
 
 ### Deploy to Azure Button - Template Download Error
 
