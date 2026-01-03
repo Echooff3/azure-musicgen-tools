@@ -1,5 +1,6 @@
 """
 Fine-tune Facebook MusicGen model with LoRA on custom audio loops.
+Optimized for drum loop generation with specialized preprocessing.
 Exports the trained model in Hugging Face compatible format.
 """
 import os
@@ -13,6 +14,7 @@ import shutil
 
 import torch
 import torchaudio
+import librosa
 from torch.utils.data import Dataset, DataLoader
 from transformers import (
     AutoProcessor, 
@@ -38,9 +40,10 @@ logger = logging.getLogger(__name__)
 
 
 class AudioLoopDataset(Dataset):
-    """Dataset for loading audio loops."""
+    """Dataset for loading audio loops with optional drum preprocessing."""
     
-    def __init__(self, audio_files, processor, target_sample_rate=32000, max_duration=30.0):
+    def __init__(self, audio_files, processor, target_sample_rate=32000, max_duration=30.0,
+                 drum_mode=False, enhance_percussion=False):
         """
         Initialize the dataset.
         
@@ -49,12 +52,51 @@ class AudioLoopDataset(Dataset):
             processor: MusicGen processor
             target_sample_rate: Target sample rate for audio
             max_duration: Maximum duration in seconds
+            drum_mode: Enable drum-specific preprocessing
+            enhance_percussion: Enhance percussive elements
         """
         self.audio_files = audio_files
         self.processor = processor
         self.target_sample_rate = target_sample_rate
         self.max_duration = max_duration
         self.max_length = int(max_duration * target_sample_rate)
+        self.drum_mode = drum_mode
+        self.enhance_percussion = enhance_percussion
+    
+    def _apply_drum_preprocessing(self, waveform: np.ndarray) -> np.ndarray:
+        """Apply drum-specific preprocessing to enhance percussive elements."""
+        if not self.drum_mode and not self.enhance_percussion:
+            return waveform
+        
+        # Separate harmonic and percussive components
+        if self.drum_mode:
+            # Isolate percussion using HPSS
+            _, percussive = librosa.effects.hpss(waveform, margin=3.0)
+            waveform = percussive
+        
+        # Enhance transients (drum hits)
+        if self.enhance_percussion:
+            onset_env = librosa.onset.onset_strength(y=waveform, sr=self.target_sample_rate)
+            onset_env = onset_env / (np.max(onset_env) + 1e-8)
+            
+            # Repeat onset envelope to match audio length
+            hop_length = 512
+            onset_frames = librosa.util.fix_length(onset_env, size=len(waveform) // hop_length + 1)
+            onset_samples = librosa.util.fix_length(
+                np.repeat(onset_frames, hop_length), 
+                size=len(waveform)
+            )
+            
+            # Enhance based on onset strength
+            enhancement_factor = 1.3
+            waveform = waveform * (1.0 + onset_samples * (enhancement_factor - 1.0))
+            
+            # Prevent clipping
+            max_val = np.max(np.abs(waveform))
+            if max_val > 1.0:
+                waveform = waveform / max_val
+        
+        return waveform
     
     def __len__(self):
         return len(self.audio_files)
@@ -83,6 +125,9 @@ class AudioLoopDataset(Dataset):
         
         # Convert to numpy and squeeze
         waveform = waveform.squeeze().numpy()
+        
+        # Apply drum preprocessing if enabled
+        waveform = self._apply_drum_preprocessing(waveform)
         
         return {
             'audio': waveform,
@@ -122,17 +167,36 @@ def train_musicgen_lora(
     gradient_accumulation_steps: int = 4,
     save_steps: int = 500,
     logging_steps: int = 100,
+    drum_mode: bool = False,
+    enhance_percussion: bool = False,
 ):
     """
     Train MusicGen model with LoRA.
+    Optimized for drum loop generation when drum_mode=True.
     
     Args:
         training_data_dir: Directory containing training audio files
         output_dir: Directory to save the trained model
         model_name: Hugging Face model name
-        lora_rank: LoRA rank parameter
-        lora_alpha: LoRA alpha parameter
+        lora_rank: LoRA rank parameter (use 16-32 for drums for better detail)
+        lora_alpha: LoRA alpha parameter (use 32-64 for drums)
         lora_dropout: LoRA dropout rate
+        learning_rate: Learning rate (use 5e-5 for drums for finer tuning)
+        num_epochs: Number of training epochs (20-30 recommended for drums)
+        batch_size: Batch size for training
+        gradient_accumulation_steps: Gradient accumulation steps
+        save_steps: Save checkpoint every N steps
+        logging_steps: Log every N steps
+        drum_mode: Enable drum-specific preprocessing (isolates percussion)
+        enhance_percussion: Enhance percussive transients in training data
+    """
+    # Adjust parameters for drum mode
+    if drum_mode:
+        logger.info("🥁 Drum mode enabled - applying drum-specific optimizations")
+        if lora_rank < 16:
+            logger.warning(f"For drum mode, consider using lora_rank >= 16 (currently {lora_rank})")
+        if learning_rate > 1e-4:
+            logger.warning(f"For drum mode, consider using learning_rate <= 1e-4 (currently {learning_rate})")
         learning_rate: Learning rate
         num_epochs: Number of training epochs
         batch_size: Batch size for training
@@ -177,7 +241,12 @@ def train_musicgen_lora(
         raise ValueError("No audio files found in training directory")
     
     # Create dataset
-    dataset = AudioLoopDataset(audio_files, processor)
+    dataset = AudioLoopDataset(
+        audio_files, 
+        processor,
+        drum_mode=drum_mode,
+        enhance_percussion=enhance_percussion
+    )
     
     # Create data collator
     def data_collator(batch):
@@ -376,7 +445,17 @@ def main():
     parser.add_argument(
         '--export-hf',
         action='store_true',
-        help='Export merged model for Hugging Face'
+        help='Export merged model for deployment (recommended)'
+    )
+    parser.add_argument(
+        '--drum-mode',
+        action='store_true',
+        help='Enable drum-specific optimizations (isolates percussion from training data)'
+    )
+    parser.add_argument(
+        '--enhance-percussion',
+        action='store_true',
+        help='Enhance percussive transients in training data'
     )
     
     args = parser.parse_args()
@@ -407,6 +486,21 @@ def main():
             
             # Train model
             output_dir = os.path.join(temp_dir, 'model_output')
+            
+            # Log drum mode settings
+            if args.drum_mode or args.enhance_percussion:
+                logger.info("=" * 60)
+                logger.info("🥁 DRUM MODE OPTIMIZATIONS")
+                logger.info("=" * 60)
+                logger.info(f"Drum mode (isolate percussion): {args.drum_mode}")
+                logger.info(f"Enhance percussion: {args.enhance_percussion}")
+                logger.info("Recommended settings for drums:")
+                logger.info("  - LoRA rank: 16-32 (higher for more detail)")
+                logger.info("  - LoRA alpha: 32-64")
+                logger.info("  - Learning rate: 5e-5 to 1e-4")
+                logger.info("  - Epochs: 20-30 for best results")
+                logger.info("=" * 60)
+            
             model, processor = train_musicgen_lora(
                 training_data_dir=training_data_dir,
                 output_dir=output_dir,
@@ -416,6 +510,8 @@ def main():
                 learning_rate=args.learning_rate,
                 num_epochs=args.num_epochs,
                 batch_size=args.batch_size,
+                drum_mode=args.drum_mode,
+                enhance_percussion=args.enhance_percussion,
             )
             
             # Export for Hugging Face if requested

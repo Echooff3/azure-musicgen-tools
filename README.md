@@ -10,6 +10,7 @@ A comprehensive toolkit for extracting audio loops and fine-tuning Facebook's Mu
 
 - 🎵 **Automatic Loop Extraction**: Extract fixed-length audio loops with automatic tempo detection
 - 🤖 **MusicGen LoRA Training**: Efficient fine-tuning using LoRA for custom music generation
+- 🥁 **Drum Loop Optimization**: Specialized training mode for isolated drum generation
 - ☁️ **Azure Integration**: Seamless integration with Azure Blob Storage and Azure ML
 - 🚀 **Azure Deployment**: Deploy trained models on cost-effective Azure infrastructure
 - 📁 **Subfolder Support**: Automatically process new audio files added to subfolders
@@ -170,12 +171,30 @@ python src/musicgen_training/train_musicgen_job.py \
 - `--input-container`: Container with training audio (output from Step 1)
 - `--output-container`: Container for trained model
 - `--model-name`: Base MusicGen model (small/medium/large)
-- `--lora-rank`: LoRA rank parameter (default: 8)
-- `--lora-alpha`: LoRA alpha parameter (default: 16)
-- `--learning-rate`: Learning rate (default: 1e-4)
-- `--num-epochs`: Training epochs (default: 10)
+- `--lora-rank`: LoRA rank parameter (default: 8, use 16-32 for drums)
+- `--lora-alpha`: LoRA alpha parameter (default: 16, use 32-64 for drums)
+- `--learning-rate`: Learning rate (default: 1e-4, use 5e-5 for drums)
+- `--num-epochs`: Training epochs (default: 10, use 20-30 for drums)
 - `--batch-size`: Training batch size (default: 4)
 - `--export-hf`: Export merged model for deployment (recommended)
+- `--drum-mode`: Enable drum-specific optimizations (isolates percussion)
+- `--enhance-percussion`: Enhance drum transients in training data
+
+**🥁 For Drum Loop Training:**
+```bash
+python src/musicgen_training/train_musicgen_job.py \
+  --input-container audio-loops \
+  --output-container musicgen-models \
+  --lora-rank 16 \
+  --lora-alpha 32 \
+  --learning-rate 5e-5 \
+  --num-epochs 25 \
+  --drum-mode \
+  --enhance-percussion \
+  --export-hf
+```
+
+See [DRUM_TRAINING_GUIDE.md](DRUM_TRAINING_GUIDE.md) for detailed drum optimization instructions.
 
 **Output:**
 - LoRA adapter weights (in `lora_model/` prefix)
