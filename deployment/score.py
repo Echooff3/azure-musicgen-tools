@@ -29,7 +29,8 @@ def init():
     # Get model path
     model_path = os.getenv("AZUREML_MODEL_DIR")
     if not model_path:
-        # Fallback for local testing
+        # Fallback for local testing only - should not be used in production
+        logger.warning("AZUREML_MODEL_DIR not set - using local fallback path (development only)")
         model_path = "./model"
     
     logger.info(f"Loading model from: {model_path}")

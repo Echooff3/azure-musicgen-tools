@@ -66,6 +66,7 @@ class AudioLoopDataset(Dataset):
     def _apply_drum_preprocessing(self, waveform: np.ndarray) -> np.ndarray:
         """Apply drum-specific preprocessing to enhance percussive elements."""
         if not self.drum_mode and not self.enhance_percussion:
+            # No drum preprocessing needed when both flags are disabled
             return waveform
         
         # Separate harmonic and percussive components
@@ -76,8 +77,11 @@ class AudioLoopDataset(Dataset):
         
         # Enhance transients (drum hits)
         if self.enhance_percussion:
+            EPSILON = 1e-8  # Small constant to prevent division by zero
+            ENHANCEMENT_FACTOR = 1.3  # Amplification factor for transients
+            
             onset_env = librosa.onset.onset_strength(y=waveform, sr=self.target_sample_rate)
-            onset_env = onset_env / (np.max(onset_env) + 1e-8)
+            onset_env = onset_env / (np.max(onset_env) + EPSILON)
             
             # Repeat onset envelope to match audio length
             hop_length = 512
@@ -88,8 +92,7 @@ class AudioLoopDataset(Dataset):
             )
             
             # Enhance based on onset strength
-            enhancement_factor = 1.3
-            waveform = waveform * (1.0 + onset_samples * (enhancement_factor - 1.0))
+            waveform = waveform * (1.0 + onset_samples * (ENHANCEMENT_FACTOR - 1.0))
             
             # Prevent clipping
             max_val = np.max(np.abs(waveform))

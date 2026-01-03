@@ -61,7 +61,7 @@ class LoopExtractor:
             tempo, _ = librosa.beat.beat_track(y=audio, sr=sr)
             # Handle both scalar and array returns
             if isinstance(tempo, np.ndarray):
-                tempo = tempo[0] if len(tempo) > 0 else self.bpm
+                tempo = tempo.item() if tempo.size > 0 else self.bpm
             logger.info(f"Detected tempo: {tempo:.2f} BPM")
             return float(tempo)
         except Exception as e:
