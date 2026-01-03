@@ -1,0 +1,87 @@
+"""
+Quick start example for Azure MusicGen Tools.
+This script demonstrates the complete pipeline from loop extraction to model training.
+"""
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+print("=" * 80)
+print("Azure MusicGen Tools - Quick Start Guide")
+print("=" * 80)
+print()
+
+print("This toolkit provides two main workflows:")
+print()
+
+print("1️⃣  EXTRACT AUDIO LOOPS")
+print("-" * 80)
+print("Extract 4-bar loops from audio files in Azure Blob Storage")
+print()
+print("Local execution:")
+print("  python src/loop_extraction/extract_loops_job.py \\")
+print("    --input-container audio-input \\")
+print("    --output-container audio-loops \\")
+print("    --bars 4 \\")
+print("    --bpm 120")
+print()
+print("AzureML job submission:")
+print("  python config/submit_loop_extraction_job.py")
+print()
+
+print("2️⃣  TRAIN MUSICGEN WITH LORA")
+print("-" * 80)
+print("Fine-tune MusicGen on extracted loops and export for Hugging Face")
+print()
+print("Local execution (requires GPU):")
+print("  python src/musicgen_training/train_musicgen_job.py \\")
+print("    --input-container audio-loops \\")
+print("    --output-container musicgen-models \\")
+print("    --model-name facebook/musicgen-small \\")
+print("    --num-epochs 10 \\")
+print("    --batch-size 4 \\")
+print("    --export-hf")
+print()
+print("AzureML job submission:")
+print("  python config/submit_musicgen_training_job.py")
+print()
+
+print("📋 PREREQUISITES")
+print("-" * 80)
+print("1. Set up your .env file (copy from .env.template)")
+print("2. Configure Azure Storage connection string")
+print("3. Configure Azure ML workspace details")
+print("4. Upload audio files to your input container")
+print("5. Create compute clusters in Azure ML:")
+print("   - CPU cluster for loop extraction")
+print("   - GPU cluster for training")
+print()
+
+print("🎵 PROCESSING NEW AUDIO")
+print("-" * 80)
+print("To process audio from a new subfolder:")
+print("  python src/loop_extraction/extract_loops_job.py \\")
+print("    --input-container audio-input \\")
+print("    --output-container audio-loops \\")
+print("    --subfolder new_music_2024")
+print()
+
+print("🚀 USING THE TRAINED MODEL")
+print("-" * 80)
+print("The trained model (with --export-hf flag) can be used directly:")
+print()
+print("from transformers import AutoProcessor, MusicgenForConditionalGeneration")
+print()
+print("# Load model from blob storage or local path")
+print('processor = AutoProcessor.from_pretrained("path/to/model")')
+print('model = MusicgenForConditionalGeneration.from_pretrained("path/to/model")')
+print()
+print("# Generate music")
+print('inputs = processor(text=["upbeat electronic music"], return_tensors="pt")')
+print("audio_values = model.generate(**inputs, max_new_tokens=256)")
+print()
+
+print("📚 For more details, see README.md")
+print("=" * 80)
