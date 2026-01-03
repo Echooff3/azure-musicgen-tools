@@ -52,6 +52,8 @@ If the "Current Value" is 0 and "Limit" is 0, you need to request quota.
 
 **Via Azure CLI:**
 
+> **Note**: Replace `Your Name` and `your@email.com` with your actual information before running this command.
+
 ```bash
 # Create a support ticket for quota increase
 az support tickets create \

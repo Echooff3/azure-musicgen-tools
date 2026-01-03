@@ -87,8 +87,11 @@ for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" -
 for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.outputs.storageConnectionString.value -o tsv') do set STORAGE_CONNECTION_STRING=%%i
 for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.outputs.workspaceName.value -o tsv') do set WORKSPACE_NAME=%%i
 for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.outputs.cpuComputeCluster.value -o tsv') do set CPU_CLUSTER=%%i
-for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.outputs.gpuComputeCluster.value -o tsv') do set GPU_CLUSTER=%%i
-for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.parameters.deployGpuCompute.value -o tsv') do set GPU_DEPLOYED=%%i
+for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.outputs.gpuComputeCluster.value -o tsv 2^>nul') do set GPU_CLUSTER=%%i
+for /f "tokens=*" %%i in ('az deployment group show --name "%DEPLOYMENT_NAME%" --resource-group "%RESOURCE_GROUP_NAME%" --query properties.parameters.deployGpuCompute.value -o tsv 2^>nul') do set GPU_DEPLOYED=%%i
+
+REM Set default if GPU_DEPLOYED is empty
+if "%GPU_DEPLOYED%"=="" set GPU_DEPLOYED=false
 
 echo.
 echo ==========================================

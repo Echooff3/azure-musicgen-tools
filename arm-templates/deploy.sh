@@ -111,7 +111,7 @@ GPU_CLUSTER=$(az deployment group show \
 GPU_DEPLOYED=$(az deployment group show \
     --name "$DEPLOYMENT_NAME" \
     --resource-group "$RESOURCE_GROUP_NAME" \
-    --query "properties.parameters.deployGpuCompute.value" -o tsv)
+    --query "properties.parameters.deployGpuCompute.value" -o tsv 2>/dev/null || echo "false")
 
 echo ""
 echo "=========================================="
