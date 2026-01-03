@@ -84,30 +84,6 @@ def check_api_versions(template):
     return api_info
 
 
-def validate_resource_dependencies(template):
-    """Check for dependency issues."""
-    resources = template.get('resources', [])
-    resource_names = set()
-    issues = []
-    
-    # Collect resource names
-    for resource in resources:
-        name = resource.get('name', '')
-        if isinstance(name, str) and not name.startswith('['):
-            resource_names.add(name)
-    
-    # Check dependencies
-    for resource in resources:
-        depends_on = resource.get('dependsOn', [])
-        for dependency in depends_on:
-            # Skip ARM expressions
-            if not isinstance(dependency, str) or dependency.startswith('['):
-                continue
-            # Simplified check - real validation would parse ARM expressions
-    
-    return issues
-
-
 def main():
     """Main validation function."""
     template_path = Path(__file__).parent / 'azuredeploy.json'
