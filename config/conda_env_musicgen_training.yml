@@ -1,25 +1,29 @@
 name: musicgen-training-env
 channels:
   - conda-forge
-  - pytorch
-  - nvidia
   - defaults
 dependencies:
   - python=3.10
-  - pytorch::pytorch>=2.0.0
-  - pytorch::torchaudio>=2.0.0
-  - nvidia::cuda-toolkit=11.8
+  - ffmpeg
   - pip
   - pip:
-    - transformers>=4.35.0
+    # PyTorch and torchaudio are pre-installed in ACPT base image
+    # Do NOT install them via pip/conda to avoid conflicts
+    # 
+    # CRITICAL: av must be installed FIRST with a pinned version that has
+    # pre-built manylinux wheels to avoid source build failures
+    - av==13.1.0
+    - audiocraft>=1.2.0
+    - transformers>=4.41.0,<4.46.0  # Pin to avoid pytree compatibility issues
     - peft>=0.7.0
     - accelerate>=0.25.0
     - datasets>=2.14.0
-    - audiocraft>=1.2.0
     - azure-storage-blob>=12.19.0
     - azure-identity>=1.15.0
-    - numpy>=1.24.0
+    - numpy>=1.24.0,<2.0.0  # Pin to 1.x for PyTorch/ACPT compatibility
     - scipy>=1.10.0
     - tqdm>=4.65.0
     - tensorboard
     - soundfile>=0.12.1
+    - librosa>=0.10.0
+    - xformers
