@@ -6,25 +6,26 @@ dependencies:
   - python=3.10
   - ffmpeg
   - pip
-  - torch::pytorch::cuda-cupti=11.8  # Explicitly pin cuda support
   - pip:
-    # CRITICAL: Override ACPT base image torch 2.1.0 with torch 2.3.1
-    # transformers 4.42.0+ requires torch 2.3+ for pytree API compatibility
+    # PyTorch 2.3.1 with CUDA 11.8 support - required by transformers 4.42.0+
     - torch==2.3.1
     - torchaudio==2.3.1
-    # CRITICAL: av must be installed with pinned version before audiocraft
-    - av==13.1.0
-    - audiocraft>=1.2.0
-    - transformers>=4.42.0  # Requires torch 2.3+ for pytree API
+    # Transformers 4.42.0+ required for EncoderDecoderCache and torch 2.3+ pytree API
+    - transformers>=4.42.0
+    # LoRA training and acceleration
     - peft>=0.8.0
     - accelerate>=0.25.0
     - datasets>=2.14.0
+    # Azure SDK
     - azure-storage-blob>=12.19.0
     - azure-identity>=1.15.0
+    # Audio processing (librosa needs soundfile, scipy, numpy)
+    - librosa>=0.10.0
+    - soundfile>=0.12.1
     - numpy>=1.24.0,<2.0.0
     - scipy>=1.10.0
+    # Training utilities
     - tqdm>=4.65.0
     - tensorboard
-    - soundfile>=0.12.1
-    - librosa>=0.10.0
-    - xformers
+    # Note: audiocraft removed - not used in training script
+    # MusicGen is loaded directly from transformers/HuggingFace

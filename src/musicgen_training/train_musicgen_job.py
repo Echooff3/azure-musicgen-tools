@@ -151,6 +151,20 @@ def collate_fn(batch, processor):
         padding=True
     )
     
+    # MusicGen requires text conditioning (input_ids) even for audio-only training
+    # Use generic prompts for each audio sample
+    text_prompts = ["audio loop"] * len(batch)
+    text_inputs = processor.tokenizer(
+        text_prompts,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+    )
+    
+    # Combine audio and text inputs
+    inputs['input_ids'] = text_inputs['input_ids']
+    inputs['attention_mask'] = text_inputs['attention_mask']
+    
     # For MusicGen, we use the input_values as labels for self-supervised training
     inputs['labels'] = inputs['input_values'].clone()
     
@@ -209,6 +223,12 @@ def train_musicgen_lora(
         model_name,
         torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
     )
+    
+    # Set decoder_start_token_id if not already set (required for training)
+    if model.config.decoder_start_token_id is None:
+        # Use pad_token_id as decoder_start_token_id (standard for MusicGen)
+        model.config.decoder_start_token_id = model.config.pad_token_id
+        logger.info(f"Set decoder_start_token_id to {model.config.pad_token_id}")
     
     # Configure LoRA
     logger.info("Configuring LoRA")
