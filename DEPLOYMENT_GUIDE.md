@@ -182,7 +182,11 @@ for blob in blobs:
 
 ## Step 7: Deploy Model for Inference (10-15 minutes)
 
-### Deploy to Azure ML Endpoint
+Choose one of two deployment options:
+
+### Option A: Online Endpoint (Always Running)
+
+Use this for real-time, low-latency inference with consistent availability.
 
 ```bash
 python config/deploy_to_azureml.py \
@@ -193,7 +197,70 @@ python config/deploy_to_azureml.py \
 
 **Note**: First deployment takes ~10-15 minutes. Subsequent updates are faster.
 
-### Get Endpoint Details
+**Cost**: ~$0.47/hour when running (always billed)
+
+### Option B: On-Demand Batch Endpoint ⭐ (Recommended for Cost Savings)
+
+Use this for non-real-time inference where you can wait a few minutes for results. **No idle costs** - you only pay when generating music.
+
+#### B.1: Create Batch Endpoint
+
+```bash
+az ml batch-endpoint create \
+  --name musicgen-batch-endpoint \
+  --resource-group musicgen-rg \
+  --workspace-name musicgen-ml-workspace \
+  --auth-mode key
+```
+
+#### B.2: Create Deployment
+
+```bash
+# Create a batch deployment configuration
+cat > batch_deployment.yml << 'EOF'
+$schema: https://azuremlschemas.azureedge.net/latest/batchDeployment.schema.json
+name: musicgen-batch-deploy
+endpoint_name: musicgen-batch-endpoint
+type: batch
+model:
+  type: mlflow_model
+  path: ./model
+code_configuration:
+  code: deployment/
+  scoring_script: score.py
+environment: azureml:AzureML-sklearn-0.24
+compute: batch-compute-cluster
+resources:
+  instance_count: 1
+  instance_type: Standard_D4s_v3
+mini_batch_size: 10
+max_concurrency_per_instance: 2
+output_action: append_row
+output_file_name: predictions.jsonl
+EOF
+
+# Deploy
+az ml batch-deployment create \
+  --file batch_deployment.yml \
+  --resource-group musicgen-rg \
+  --workspace-name musicgen-ml-workspace
+```
+
+#### B.3: Get Batch Endpoint URI
+
+```bash
+az ml batch-endpoint show \
+  --name musicgen-batch-endpoint \
+  --resource-group musicgen-rg \
+  --workspace-name musicgen-ml-workspace \
+  --query scoring_uri -o tsv
+```
+
+**Cost**: Pay only per job (~$0.02-0.05 per song generation)
+
+---
+
+### Option A: Get Online Endpoint Details
 
 ```bash
 # Get endpoint URI
@@ -210,9 +277,41 @@ az ml online-endpoint get-credentials \
   --workspace-name musicgen-ml-workspace
 ```
 
-Save these for Step 8.
+### Option B: Submit Batch Job
 
-## Step 8: Generate Music! (< 1 minute)
+```bash
+# Create input data (JSON Lines format)
+cat > input_data.jsonl << 'EOF'
+{"prompt": "upbeat electronic music with drums"}
+{"prompt": "classical piano piece"}
+{"prompt": "heavy metal guitar riff"}
+EOF
+
+# Upload to storage
+az storage blob upload \
+  --account-name $AZURE_STORAGE_ACCOUNT_NAME \
+  --container-name batch-inputs \
+  --name input_data.jsonl \
+  --file input_data.jsonl
+
+# Submit batch job
+az ml batch-endpoint invoke \
+  --name musicgen-batch-endpoint \
+  --request-file batch-inputs/input_data.jsonl \
+  --resource-group musicgen-rg \
+  --workspace-name musicgen-ml-workspace
+```
+
+**Note**: Batch jobs typically complete within 5-10 minutes
+
+Save the endpoint URI and credentials for Step 8.
+
+## Step 8: Generate Music! (< 1 minute or 5-10 minutes)
+
+### Option A: Real-Time Generation (Online Endpoint)
+
+**Latency**: < 1 minute  
+**Cost**: $0.47/hour (always running)
 
 ```bash
 export ENDPOINT_URI="<your-endpoint-uri>"
@@ -223,6 +322,72 @@ python examples/generate_music_client.py \
   --api-key "$AZUREML_API_KEY" \
   --prompt "upbeat electronic music with drums" \
   --output my_first_song.wav
+```
+
+### Option B: On-Demand Generation (Batch Endpoint) ⭐
+
+**Latency**: 5-10 minutes (asynchronous)  
+**Cost**: ~$0.02-0.05 per song (pay per use)
+
+```bash
+export BATCH_ENDPOINT_URI="<your-batch-endpoint-uri>"
+export BATCH_ENDPOINT_NAME="musicgen-batch-endpoint"
+
+# Submit multiple songs for generation
+python -c "
+import json
+import tempfile
+import os
+from azure.ai.ml import MLClient
+from azure.identity import DefaultAzureCredential
+
+credential = DefaultAzureCredential()
+ml_client = MLClient(
+    credential=credential,
+    subscription_id='<your-subscription-id>',
+    resource_group_name='musicgen-rg',
+    workspace_name='musicgen-ml-workspace'
+)
+
+# Create input data
+prompts = [
+    {'prompt': 'upbeat electronic music with drums'},
+    {'prompt': 'classical piano piece in C minor'},
+    {'prompt': 'smooth jazz with saxophone'},
+]
+
+with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+    for p in prompts:
+        f.write(json.dumps(p) + '\n')
+    input_file = f.name
+
+# Submit batch job
+job = ml_client.batch_endpoints.invoke(
+    endpoint_name='musicgen-batch-endpoint',
+    request_file=input_file
+)
+
+print(f'Batch job submitted: {job.name}')
+print(f'Check progress: az ml job show --name {job.name}')
+
+os.unlink(input_file)
+"
+```
+
+**Check Job Status:**
+
+```bash
+# Monitor batch job
+az ml job show \
+  --name <job-name> \
+  --resource-group musicgen-rg \
+  --workspace-name musicgen-ml-workspace
+
+# Download results when complete
+az storage blob download-batch \
+  --account-name $AZURE_STORAGE_ACCOUNT_NAME \
+  --source batch-outputs \
+  --destination ./results
 ```
 
 **Play the audio:**
@@ -357,13 +522,31 @@ Compute clusters auto-scale to 0, so they cost nothing when idle.
 
 ## Estimated Total Cost Breakdown
 
+### Online Endpoint (Always Running)
+
 | Phase | Time | Cost |
 |-------|------|------|
 | Infrastructure Setup | 15 min | $0 |
 | Loop Extraction (1GB audio) | 30 min | $0.05 |
 | Training (10 epochs, 100 loops) | 3 hrs | $9.18 |
 | Model Deployment | 15 min | $0.03 |
-| Idle (1 month) | - | $7.00 |
-| **Total (first month)** | **4 hrs** | **~$16.26** |
+| Idle (1 month) | - | $14.10 |
+| **Total (first month)** | **4 hrs** | **~$23.36** |
 
-After initial setup, generating 1000 songs costs ~$1.00!
+### Batch Endpoint (On-Demand) ⭐ RECOMMENDED
+
+| Phase | Time | Cost |
+|-------|------|------|
+| Infrastructure Setup | 15 min | $0 |
+| Loop Extraction (1GB audio) | 30 min | $0.05 |
+| Training (10 epochs, 100 loops) | 3 hrs | $9.18 |
+| Model Deployment | 5 min | $0 |
+| Generate 1000 songs/month | - | $20.00 |
+| **Total (first month)** | **4 hrs** | **~$29.23** |
+| **Idle (no generation)** | - | **$9.23** |
+
+**Key Difference**: With batch endpoints, you pay only when generating music. If you're not actively generating, you have essentially zero cost except for storage.
+
+After initial setup:
+- Online endpoint: **~$0.47/hour always** = ~$340/month idle
+- Batch endpoint: **~$0.02-0.05 per song** = pay only for what you use

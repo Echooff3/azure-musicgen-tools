@@ -6,21 +6,22 @@ dependencies:
   - python=3.10
   - ffmpeg
   - pip
+  - torch::pytorch::cuda-cupti=11.8  # Explicitly pin cuda support
   - pip:
-    # PyTorch and torchaudio are pre-installed in ACPT base image
-    # Do NOT install them via pip/conda to avoid conflicts
-    # 
-    # CRITICAL: av must be installed FIRST with a pinned version that has
-    # pre-built manylinux wheels to avoid source build failures
+    # CRITICAL: Override ACPT base image torch 2.1.0 with torch 2.3.1
+    # transformers 4.42.0+ requires torch 2.3+ for pytree API compatibility
+    - torch==2.3.1
+    - torchaudio==2.3.1
+    # CRITICAL: av must be installed with pinned version before audiocraft
     - av==13.1.0
     - audiocraft>=1.2.0
-    - transformers>=4.41.0,<4.46.0  # Pin to avoid pytree compatibility issues
-    - peft>=0.7.0
+    - transformers>=4.42.0  # Requires torch 2.3+ for pytree API
+    - peft>=0.8.0
     - accelerate>=0.25.0
     - datasets>=2.14.0
     - azure-storage-blob>=12.19.0
     - azure-identity>=1.15.0
-    - numpy>=1.24.0,<2.0.0  # Pin to 1.x for PyTorch/ACPT compatibility
+    - numpy>=1.24.0,<2.0.0
     - scipy>=1.10.0
     - tqdm>=4.65.0
     - tensorboard
