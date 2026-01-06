@@ -144,4 +144,105 @@ ValueError: Make sure to set the decoder_start_token_id attribute of the model's
 
 **Fix Applied**: Set `decoder_start_token_id` to `pad_token_id` after loading the model (standard practice for MusicGen)
 
+**Status**: ✅ FIXED
+
+---
+
+## Error #8: Embedding Layer Type Mismatch (FloatTensor instead of LongTensor)
+```
+RuntimeError: Expected tensor for argument #1 'indices' to have one of the following scalar types: Long, Int; but got torch.cuda.FloatTensor instead (while checking arguments for embedding)
+```
+
+**Stack Trace Location**: 
+- `modeling_musicgen.py`, line 576: `self.embed_tokens[codebook](input[:, codebook])`
+- The decoder's embedding layer expects discrete token indices (Long/Int), not float values
+
+**Root Cause**:
+- `collate_fn` was setting `labels = input_values.clone()` 
+- `input_values` are raw audio waveforms (FloatTensor)
+- MusicGen's decoder uses embeddings that require **discrete audio codes** (integer indices from EnCodec)
+- The decoder expects labels to be audio codes (shape: [batch, num_codebooks, seq_len], dtype: Long)
+- We were passing raw float audio, causing the embedding lookup to fail
+
+**Analysis**:
+MusicGen architecture:
+1. **Audio Encoder (EnCodec)**: Encodes raw audio → discrete codes (integers, 4 codebooks)
+2. **Text Encoder (T5)**: Encodes text prompts → encoder hidden states
+3. **Decoder**: Takes audio codes as input, generates new audio codes
+
+For training, we need to:
+1. Encode audio through EnCodec to get discrete codes
+2. Use those codes as both input and labels for the decoder
+3. The model handles the teacher-forcing internally
+
+**Fix Applied**: 
+Updated `collate_fn` to:
+1. Move audio encoding to the model's audio_encoder (EnCodec)
+2. Extract discrete audio codes (quantized indices)
+3. Pass codes as `decoder_input_ids` and shifted codes as `labels`
+4. Ensure all tensors have correct dtypes (Long for indices)
+
+**Code Changes**:
+```python
+# OLD (WRONG):
+inputs['labels'] = inputs['input_values'].clone()  # FloatTensor - WRONG!
+
+# NEW (CORRECT):
+# Created custom MusicGenTrainer class that:
+# 1. Takes raw audio (input_values) from collate_fn
+# 2. Encodes through model.audio_encoder.encode() to get discrete codes
+# 3. Passes codes as decoder_input_ids and labels
+# 4. Ensures codes are Long dtype for embedding lookup
+
+class MusicGenTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        # Get the base model (unwrap PEFT)
+        base_model = model.base_model.model if hasattr(model, 'base_model') else model
+        
+        # Encode audio to discrete codes
+        with torch.no_grad():
+            encoder_outputs = base_model.audio_encoder.encode(
+                input_values, 
+                padding_mask=padding_mask,
+                bandwidth=6.0
+            )
+            audio_codes = encoder_outputs.audio_codes.squeeze(0).long()
+        
+        # Forward with discrete codes
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            decoder_input_ids=audio_codes,
+            labels=audio_codes,
+        )
+        return outputs.loss
+```
+
+**Files Modified**:
+- `src/musicgen_training/train_musicgen_job.py`:
+  - Updated `collate_fn` to NOT set labels (custom trainer handles it)
+  - Added `MusicGenTrainer` class with custom `compute_loss`
+  - Changed `Trainer` → `MusicGenTrainer` instantiation
+
+**Status**: ✅ FIXED
+
+---
+
+## Error #9: Unsupported EnCodec Bandwidth
+```
+ValueError: This model doesn't support the bandwidth 6.0. Select one of [2.2].
+```
+
+**Root Cause**:
+- Hardcoded `bandwidth=6.0` in the audio encoder call
+- MusicGen-small's EnCodec only supports bandwidth 2.2
+- Different model sizes have different supported bandwidths
+
+**Fix Applied**: 
+Dynamically get the highest available bandwidth from the encoder config:
+```python
+target_bandwidths = base_model.audio_encoder.config.target_bandwidths
+bandwidth = max(target_bandwidths) if target_bandwidths else None
+```
+
 **Status**: ✅ FIXED - Resubmitting job now

@@ -143,7 +143,7 @@ def collate_fn(batch, processor):
     audio_arrays = [item['audio'] for item in batch]
     sampling_rate = batch[0]['sampling_rate']
     
-    # Process audio inputs
+    # Process audio inputs - this gives us input_values (raw audio for encoder)
     inputs = processor(
         audio=audio_arrays,
         sampling_rate=sampling_rate,
@@ -165,10 +165,77 @@ def collate_fn(batch, processor):
     inputs['input_ids'] = text_inputs['input_ids']
     inputs['attention_mask'] = text_inputs['attention_mask']
     
-    # For MusicGen, we use the input_values as labels for self-supervised training
-    inputs['labels'] = inputs['input_values'].clone()
+    # NOTE: We do NOT set labels here. The custom trainer will:
+    # 1. Encode input_values through audio_encoder to get discrete codes
+    # 2. Use those codes as labels for the decoder
+    # This is because encoding requires the model, which isn't available here
     
     return inputs
+
+
+class MusicGenTrainer(Trainer):
+    """
+    Custom trainer for MusicGen that properly handles audio encoding.
+    
+    MusicGen requires discrete audio codes (from EnCodec) as labels,
+    not raw audio waveforms. This trainer encodes audio to codes
+    during the training step.
+    """
+    
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        """
+        Compute training loss with proper audio encoding.
+        
+        The key insight: MusicGen's decoder expects discrete audio codes (Long),
+        not raw audio (Float). We encode audio using the model's audio_encoder.
+        """
+        # Extract input values (raw audio)
+        input_values = inputs.get('input_values')
+        input_ids = inputs.get('input_ids')
+        attention_mask = inputs.get('attention_mask')
+        padding_mask = inputs.get('padding_mask')
+        
+        # Get the base model (unwrap PEFT if needed)
+        base_model = model.base_model if hasattr(model, 'base_model') else model
+        if hasattr(base_model, 'model'):
+            base_model = base_model.model
+        
+        # Encode audio to discrete codes using the audio encoder (EnCodec)
+        # This returns audio_codes of shape [batch, num_codebooks, seq_len]
+        # Note: bandwidth depends on model size - small only supports 2.2
+        with torch.no_grad():
+            # Get supported bandwidths from the audio encoder config
+            target_bandwidths = base_model.audio_encoder.config.target_bandwidths
+            # Use the highest available bandwidth for best quality
+            bandwidth = max(target_bandwidths) if target_bandwidths else None
+            
+            encoder_outputs = base_model.audio_encoder.encode(
+                input_values, 
+                padding_mask=padding_mask,
+                bandwidth=bandwidth
+            )
+            # audio_codes shape: [batch, num_codebooks, seq_len]
+            audio_codes = encoder_outputs.audio_codes.squeeze(0)  # Remove extra dim if present
+        
+        # Ensure codes are Long type for embedding lookup
+        audio_codes = audio_codes.long()
+        
+        # For MusicGen training:
+        # - decoder_input_ids: the audio codes (what we condition on)
+        # - labels: shifted audio codes (what we predict)
+        # The model handles the shifting internally when labels are provided
+        
+        # Forward pass with properly encoded inputs
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            decoder_input_ids=audio_codes,
+            labels=audio_codes,  # Model will shift these internally
+        )
+        
+        loss = outputs.loss
+        
+        return (loss, outputs) if return_outputs else loss
 
 
 def train_musicgen_lora(
@@ -285,8 +352,8 @@ def train_musicgen_lora(
         report_to=["tensorboard"],
     )
     
-    # Create trainer
-    trainer = Trainer(
+    # Create trainer - use custom MusicGenTrainer for proper audio code handling
+    trainer = MusicGenTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
