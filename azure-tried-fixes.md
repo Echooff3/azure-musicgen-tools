@@ -245,4 +245,25 @@ target_bandwidths = base_model.audio_encoder.config.target_bandwidths
 bandwidth = max(target_bandwidths) if target_bandwidths else None
 ```
 
+**Status**: ✅ FIXED
+
+---
+
+## Error #10: Float32/Float16 Dtype Mismatch
+```
+RuntimeError: Input type (float) and bias type (c10::Half) should be the same
+```
+
+**Root Cause**:
+- Model loaded with `torch_dtype=torch.float16` for GPU efficiency
+- Audio `input_values` from DataLoader are float32
+- EnCodec encoder expects matching dtypes for input and weights
+
+**Fix Applied**: 
+Cast input_values to match encoder dtype before encoding:
+```python
+encoder_dtype = next(base_model.audio_encoder.parameters()).dtype
+input_values = input_values.to(dtype=encoder_dtype)
+```
+
 **Status**: ✅ FIXED - Resubmitting job now

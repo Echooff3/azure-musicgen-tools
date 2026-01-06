@@ -200,6 +200,11 @@ class MusicGenTrainer(Trainer):
         if hasattr(base_model, 'model'):
             base_model = base_model.model
         
+        # Get the audio encoder's dtype and cast input accordingly
+        # The model may be in float16 while inputs are float32
+        encoder_dtype = next(base_model.audio_encoder.parameters()).dtype
+        input_values = input_values.to(dtype=encoder_dtype)
+        
         # Encode audio to discrete codes using the audio encoder (EnCodec)
         # This returns audio_codes of shape [batch, num_codebooks, seq_len]
         # Note: bandwidth depends on model size - small only supports 2.2
