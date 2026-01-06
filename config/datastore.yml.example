@@ -1,0 +1,8 @@
+$schema: https://azuremlschemas.azureedge.net/latest/azureBlob.schema.json
+name: musicgen_models
+type: azure_blob
+description: Datastore for MusicGen trained models
+account_name: mgstmofpyfs7g3j
+container_name: musicgen-models
+credentials:
+  account_key: ${STORAGE_ACCOUNT_KEY}
