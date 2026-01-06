@@ -51,6 +51,25 @@ OSError: undefined symbol: _ZN3c104impl3cow11cow_deleterEPv
 
 ---
 
+### Error #5: Azure ML Batch Scoring - Missing model_type in config.json
+```
+ValueError: Unrecognized model in /mnt/azureml/cr/j/e1ebddddf54940f5ae920d5b4390459d/exe/wd/4c27a924-8de6-491d-badc-363450fd2d69_score_model. 
+Should have a `model_type` key in its config.json
+```
+
+**Root Cause**: When Azure ML downloads the registered model to the batch compute instance, the config.json either gets corrupted or is not properly formatted. The AutoProcessor.from_pretrained() requires a valid model_type at the root level.
+
+**Diagnosis**: The local model/config.json HAS "model_type": "musicgen" at line 70, but the downloaded version in Azure ML batch doesn't.
+
+**Fix Attempted #5**: 
+- Option A: Ensure config.json is properly included in the model artifact registration
+- Option B: Use try/except in score.py to handle missing model_type gracefully
+- Option C: Load model explicitly as MusicgenForConditionalGeneration instead of AutoProcessor
+
+**PENDING**: Need to verify model registration process and ensure config.json is correctly packaged and transferred to batch compute
+
+---
+
 ### Error #5: Dependency Conflict (CURRENT)
 ```
 ERROR: Cannot install av==13.1.0 and torch==2.3.1 because:

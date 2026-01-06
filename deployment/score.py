@@ -37,7 +37,16 @@ def init():
     
     # Load processor and model
     # Use CPU and float32 for cost-effective inference
-    processor = AutoProcessor.from_pretrained(model_path)
+    try:
+        # Try standard AutoProcessor loading first
+        processor = AutoProcessor.from_pretrained(model_path)
+    except ValueError as e:
+        # If AutoProcessor fails due to missing model_type in config.json,
+        # fall back to explicit MusicGen processor loading
+        logger.warning(f"AutoProcessor failed, attempting explicit MusicGen processor load: {e}")
+        from transformers import AutoFeatureExtractor
+        processor = AutoFeatureExtractor.from_pretrained("facebook/musicgen-small")
+    
     model = MusicgenForConditionalGeneration.from_pretrained(
         model_path,
         torch_dtype=torch.float32,  # Use float32 on CPU

@@ -1,0 +1,15 @@
+$schema: https://azuremlschemas.azureedge.net/latest/batchDeployment.schema.json
+endpoint_name: musicgen-batch-endpoint
+name: musicgen-batch-deploy
+type: model
+model: azureml:musicgen_trained:1
+compute: azureml:gpu-cluster
+code_configuration:
+  code: .
+  scoring_script: score.py
+environment: azureml:musicgen-training-env:15
+resources:
+  instance_count: 1
+settings:
+  max_concurrency_per_instance: 1
+  mini_batch_size: 1
