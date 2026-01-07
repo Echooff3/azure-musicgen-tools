@@ -134,8 +134,20 @@ class AudioLoopDataset(Dataset):
         
         return {
             'audio': waveform,
-            'sampling_rate': self.target_sample_rate
+            'sampling_rate': self.target_sample_rate,
+            'path': str(audio_path)
         }
+
+
+def _get_folder_description(path: str) -> str:
+    """Extract folder name from path and format it as a description.
+    
+    Example: '/data/AVH_Rock_Drums/sample.wav' -> 'AVH Rock Drums'
+    """
+    import os
+    folder_name = os.path.basename(os.path.dirname(path))
+    # Replace underscores with spaces for more natural text conditioning
+    return folder_name.replace('_', ' ')
 
 
 def collate_fn(batch, processor):
@@ -152,8 +164,14 @@ def collate_fn(batch, processor):
     )
     
     # MusicGen requires text conditioning (input_ids) even for audio-only training
-    # Use generic prompts for each audio sample
-    text_prompts = ["drum loop"] * len(batch)
+    # Generate prompts using folder name for better conditioning
+    text_prompts = [f"drum loop {_get_folder_description(item['path'])}" for item in batch]
+    
+    # Log the prompts for verification
+    logger = logging.getLogger(__name__)
+    for i, prompt in enumerate(text_prompts):
+        logger.info(f"Sample {i}: prompt='{prompt}'")
+    
     text_inputs = processor.tokenizer(
         text_prompts,
         return_tensors="pt",
