@@ -6,6 +6,9 @@ import base64
 import pandas as pd
 import os
 import sys
+import io
+import numpy as np
+import scipy.io.wavfile as wav
 from azure.ai.ml import MLClient
 from azure.identity import DefaultAzureCredential
 
@@ -72,8 +75,12 @@ def main():
         # Decode and save audio files
         for idx, row in df.iterrows():
             if row['status'] == 'success' and row['audio_base64']:
-                # Decode base64 audio
+                # Decode base64 audio (16-bit PCM WAV format from score.py)
                 audio_bytes = base64.b64decode(row['audio_base64'])
+                
+                # Read the WAV data (already 16-bit PCM, no conversion needed)
+                wav_buffer = io.BytesIO(audio_bytes)
+                sample_rate, audio_data = wav.read(wav_buffer)
                 
                 # Create filename from prompt
                 safe_prompt = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in row['prompt'])
@@ -81,9 +88,8 @@ def main():
                 filename = f"{idx:03d}_{safe_prompt}.wav"
                 filepath = os.path.join(args.output_dir, filename)
                 
-                # Save WAV file
-                with open(filepath, 'wb') as f:
-                    f.write(audio_bytes)
+                # Save as 16-bit PCM WAV (already in correct format)
+                wav.write(filepath, sample_rate, audio_data)
                 
                 print(f"💾 Saved: {filename} ({row['duration_seconds']:.2f}s)")
             else:

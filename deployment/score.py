@@ -113,47 +113,54 @@ def run(mini_batch):
                         
                         prompt = data.get("prompt", "")
                         max_new_tokens = data.get("max_new_tokens", 256)
-                        temperature = data.get("temperature", 1.0)
-                        top_k = data.get("top_k", 250)
-                        top_p = data.get("top_p", 0.0)
                         guidance_scale = data.get("guidance_scale", 3.0)
                         
-                        logger.info(f"Line {line_num}: Generating audio for prompt: {prompt}")
+                        logger.info(f"Line {line_num}: Generating audio for prompt: {prompt or '(unconditional)'}")
                         
-                        # Process input
-                        inputs = processor(
-                            text=[prompt] if prompt else None,
-                            padding=True,
-                            return_tensors="pt",
-                        )
+                        # Process input according to MusicGen documentation
+                        # https://huggingface.co/docs/transformers/main/en/model_doc/musicgen
+                        if prompt:
+                            # Text-conditional generation
+                            inputs = processor(
+                                text=[prompt],
+                                padding=True,
+                                return_tensors="pt",
+                            )
+                            # Move inputs to same device as model
+                            inputs = {k: v.to(model.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+                        else:
+                            # Unconditional generation - use get_unconditional_inputs()
+                            inputs = model.get_unconditional_inputs(num_samples=1)
+                            inputs = {k: v.to(model.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
                         
-                        # Move inputs to same device as model
-                        inputs = {k: v.to(model.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
-                        
-                        # Generate audio
+                        # Generate audio with sampling enabled (better quality than greedy)
+                        # Sampling is enabled by default but explicitly set for clarity
                         with torch.no_grad():
                             audio_values = model.generate(
                                 **inputs,
-                                max_new_tokens=max_new_tokens,
                                 do_sample=True,
-                                temperature=temperature,
-                                top_k=top_k,
-                                top_p=top_p,
                                 guidance_scale=guidance_scale,
+                                max_new_tokens=max_new_tokens,
                             )
                         
                         # Get sample rate
                         sample_rate = model.config.audio_encoder.sampling_rate
                         
-                        # Convert to numpy
+                        # Convert to numpy (MusicGen outputs float32 in range [-1.0, 1.0])
                         audio_array = audio_values[0, 0].cpu().numpy()
                         
+                        # Convert float32 [-1, 1] to int16 PCM for better compression and compatibility
+                        # Clip to ensure values are in [-1, 1] range
+                        audio_array = np.clip(audio_array, -1.0, 1.0)
+                        # Convert to 16-bit PCM
+                        audio_array_int16 = (audio_array * 32767).astype(np.int16)
+                        
                         # Calculate duration
-                        duration = len(audio_array) / sample_rate
+                        duration = len(audio_array_int16) / sample_rate
                         
                         # Convert to WAV format and encode as base64
                         wav_buffer = io.BytesIO()
-                        scipy.io.wavfile.write(wav_buffer, sample_rate, audio_array)
+                        scipy.io.wavfile.write(wav_buffer, sample_rate, audio_array_int16)
                         wav_buffer.seek(0)
                         audio_base64 = base64.b64encode(wav_buffer.read()).decode('utf-8')
                         
