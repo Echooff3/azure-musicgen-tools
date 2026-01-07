@@ -153,7 +153,7 @@ def collate_fn(batch, processor):
     
     # MusicGen requires text conditioning (input_ids) even for audio-only training
     # Use generic prompts for each audio sample
-    text_prompts = ["audio loop"] * len(batch)
+    text_prompts = ["drum loop"] * len(batch)
     text_inputs = processor.tokenizer(
         text_prompts,
         return_tensors="pt",
