@@ -177,6 +177,34 @@ ERROR:score_module:Error processing line 1: Expecting property name enclosed in 
 
 ---
 
+### Error #15: Batch Results Not in Blob Storage
+```
+Issue: Job successful but no audio files in storage container. Container "batch-outputs" doesn't exist.
+```
+
+**Root Cause**:
+- Batch deployments save outputs to Azure ML job storage, NOT blob containers
+- The DataFrame with base64-encoded audio is saved to the job's output location
+- Need to download from job outputs and decode audio files
+
+**Solution Implemented**:
+Created `download_batch_results.py` script to:
+1. Download job outputs from Azure ML
+2. Read predictions DataFrame
+3. Decode base64 audio to WAV files
+4. Save locally
+
+**Usage**:
+```bash
+python download_batch_results.py --job-name <job-name> --output-dir ./my_music
+```
+
+**Alternative**: Could modify score.py to upload WAV files directly to blob storage during inference, but this adds complexity and cost (extra blob operations).
+
+**Status**: ✅ FIXED - Download script created
+
+---
+
 ### Error #6: Azure ML Batch Inference - Missing azureml-core SDK
 ```
 ModuleNotFoundError: No module named 'azureml'

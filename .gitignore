@@ -149,3 +149,5 @@ tmp/
 temp/
 *.tmp
 musicgen/
+my_generated_music/
+batch_results/
