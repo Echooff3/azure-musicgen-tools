@@ -70,6 +70,34 @@ Should have a `model_type` key in its config.json
 
 ---
 
+### Error #6: Azure ML Batch Inference - Missing azureml-core SDK
+```
+ModuleNotFoundError: No module named 'azureml'
+```
+
+**Root Cause**: The batch inference environment (musicgen-training-env) is missing the legacy `azureml-core` and `azureml-defaults` packages that Azure ML's batch driver needs.
+
+**Environment Issue**: The Azure ML batch inference driver internally uses the legacy azureml SDK, but we were only including the newer `azure-ai-ml` SDK.
+
+**Fix Attempted #6**:
+- Added `azureml-core>=1.57.0` and `azureml-defaults>=1.57.0` to:
+  - requirements.txt
+  - config/conda_env_musicgen_training.yml
+  - deployment/conda_inference.yml (batch inference environment)
+- These need to be included in any batch inference environment
+- Also added azure-ai-ml>=1.12.0 for modern SDK compatibility
+
+**Status**: ✅ Fixed - Updated deployment/conda_inference.yml with required azureml packages
+
+**Action Required**: Re-create the Azure ML environment:
+```bash
+az ml environment create --file deployment/conda_inference.yml --resource-group <rg> --workspace-name <ws>
+```
+
+**Why This Failed**: The batch-deployment.yml was using musicgen-training-env:15 which may not have had the azureml SDK, and the inference environment file was missing it entirely. The Azure ML batch driver requires azureml-core internally.
+
+---
+
 ### Error #5: Dependency Conflict (CURRENT)
 ```
 ERROR: Cannot install av==13.1.0 and torch==2.3.1 because:

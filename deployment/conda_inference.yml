@@ -11,3 +11,6 @@ dependencies:
     - scipy>=1.10.0
     - numpy>=1.24.0
     - soundfile>=0.12.1
+    - azureml-core>=1.57.0
+    - azureml-defaults>=1.57.0
+    - azure-ai-ml>=1.12.0

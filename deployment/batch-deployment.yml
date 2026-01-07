@@ -7,7 +7,7 @@ compute: azureml:gpu-cluster
 code_configuration:
   code: .
   scoring_script: score.py
-environment: azureml:musicgen-training-env:15
+environment: azureml:musicgen-inference-env:1
 resources:
   instance_count: 1
 settings:
