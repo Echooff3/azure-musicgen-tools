@@ -1,4 +1,3 @@
-{"prompt": "heavy metal drum loop"}
-{"prompt": "heavy metal drum loop with a fill"}
-{"prompt": "rock drum loop"}
-    
+{"prompt": "heavy metal drum loop", "max_new_tokens": 128}
+{"prompt": "heavy metal drum loop with a fill", "max_new_tokens": 128}
+{"prompt": "rock drum loop", "max_new_tokens": 128}

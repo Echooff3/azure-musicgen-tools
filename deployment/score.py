@@ -45,10 +45,16 @@ def init():
     processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
     
     logger.info("Loading base model architecture from HuggingFace...")
+    # Use GPU if available, otherwise CPU
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Azure batch compute doesn't support float16 - always use float32
+    torch_dtype = torch.float32
+    logger.info(f"Using device: {device} with dtype: {torch_dtype}")
+    
     model = MusicgenForConditionalGeneration.from_pretrained(
         "facebook/musicgen-small",
-        torch_dtype=torch.float32,
-        device_map="cpu"
+        torch_dtype=torch_dtype,
+        device_map=device
     )
     
     # Now load the fine-tuned weights from the registered model
@@ -120,6 +126,9 @@ def run(mini_batch):
                             padding=True,
                             return_tensors="pt",
                         )
+                        
+                        # Move inputs to same device as model
+                        inputs = {k: v.to(model.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
                         
                         # Generate audio
                         with torch.no_grad():

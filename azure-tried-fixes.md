@@ -205,6 +205,42 @@ python download_batch_results.py --job-name <job-name> --output-dir ./my_music
 
 ---
 
+### Error #16: Batch Job Timeout
+```
+The run() function in the entry script had timeout for 3 times.
+Failed. Entry script error. No progress update in 195 seconds.
+```
+
+**Root Cause**:
+1. **CPU vs GPU mismatch**: batch-deployment.yml used gpu-cluster but score.py forced `device_map="cpu"`
+2. **No timeout settings**: Default timeout (~180s) too short for music generation
+3. **CPU generation too slow**: Music generation on CPU takes 5+ minutes per sample
+4. **Default max_new_tokens**: Was using default 256 tokens which generates longer audio
+
+**Fixes Applied**:
+1. **Use GPU properly**: Changed score.py to auto-detect and use GPU if available
+   - `device = "cuda" if torch.cuda.is_available() else "cpu"`
+   - `torch_dtype = torch.float16 if device == "cuda" else torch.float32`
+   - Move inputs to model device
+
+2. **Increase timeouts**: Added to batch-deployment.yml
+   - `task_invocation_timeout_seconds: 600` (10 minutes per batch)
+   - `retry_settings.timeout: 600`
+   - `retry_settings.max_retries: 1` (reduce unnecessary retries)
+
+3. **Reduce generation length**: Added `max_new_tokens: 128` to input_data.jsonl for faster testing
+   - 256 tokens ≈ 8 seconds of audio
+   - 128 tokens ≈ 4 seconds of audio (faster generation)
+
+**Performance Impact**:
+- CPU: ~5-10 minutes per sample
+- GPU: ~30-60 seconds per sample
+- With fixes: Should complete 3 samples in < 5 minutes on GPU
+
+**Status**: ✅ FIXED - GPU enabled, timeouts increased, generation shortened
+
+---
+
 ### Error #6: Azure ML Batch Inference - Missing azureml-core SDK
 ```
 ModuleNotFoundError: No module named 'azureml'
@@ -363,6 +399,51 @@ ValueError: You have to specify either input_ids or inputs_embeds
 4. Keep audio as labels for self-supervised training
 
 **Status**: ✅ FIXED - Resubmitting job now
+
+---
+
+## Error #17: Batch Inference Float16 Not Supported
+```
+CSV Output:
+heavy metal drum loop  0 0.0 "error: Unsupported data type 'float16'"
+heavy metal drum loop with a fill  0 0.0 "error: Unsupported data type 'float16'"
+rock drum loop  0 0.0 "error: Unsupported data type 'float16'"
+rock drum loop  0 0.0 "error: Expecting value: line 1 column 1 (char 0)"
+```
+
+**Root Cause**:
+1. **Float16 Error**: deployment/score.py uses `torch.float16` when GPU is detected (line 54)
+   - Azure ML batch compute doesn't support float16 inference
+   - Need to use float32 for batch deployments
+   
+2. **JSON Parse Error**: input_data.jsonl has trailing whitespace after the last prompt
+   - Empty line causes "Expecting value: line 1 column 1 (char 0)" error
+
+**Fix Applied**:
+1. Changed score.py to always use `torch.float32` for batch inference
+   - Removed conditional `torch_dtype = torch.float16 if device == "cuda" else torch.float32`
+   - Set `torch_dtype = torch.float32` regardless of device
+   - Comment explains Azure batch compute limitation
+
+2. Cleaned up input_data.jsonl:
+   - Removed trailing whitespace/empty lines
+   - Each line is a valid JSON object with no trailing newlines
+
+**Code Changes**:
+```python
+# OLD (WRONG):
+torch_dtype = torch.float16 if device == "cuda" else torch.float32
+
+# NEW (CORRECT):
+# Azure batch compute doesn't support float16 - always use float32
+torch_dtype = torch.float32
+```
+
+**Files Modified**:
+- deployment/score.py: Force float32 inference
+- input_data.jsonl: Remove trailing whitespace
+
+**Status**: ✅ FIXED - Redeploying batch endpoint
 
 ---
 

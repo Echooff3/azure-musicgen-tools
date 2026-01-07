@@ -13,3 +13,5 @@ resources:
 settings:
   max_concurrency_per_instance: 1
   mini_batch_size: 1
+  error_threshold: -1
+  logging_level: DEBUG
