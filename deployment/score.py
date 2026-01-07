@@ -5,6 +5,7 @@ Optimized for CPU inference to minimize costs.
 import json
 import logging
 import os
+import pandas as pd
 import numpy as np
 import torch
 from transformers import AutoProcessor, MusicgenForConditionalGeneration
@@ -72,98 +73,111 @@ def init():
     logger.info("Model loaded successfully")
 
 
-def run(raw_data):
+def run(mini_batch):
     """
-    Process inference request.
+    Process batch inference request.
     
-    Expected input format:
+    For batch endpoints, mini_batch is a list of file paths to JSONL files.
+    Each line in the JSONL contains:
     {
         "prompt": "upbeat electronic music",
         "max_new_tokens": 256,
         "temperature": 1.0,
         "top_k": 250,
         "top_p": 0.0,
-        "guidance_scale": 3.0,
-        "return_format": "base64"  // or "array"
+        "guidance_scale": 3.0
     }
     
-    Returns:
-    {
-        "audio": "<base64_encoded_wav>" or [array],
-        "sample_rate": 32000,
-        "duration_seconds": 10.0
-    }
+    Returns: pandas DataFrame with columns [prompt, audio_base64, sample_rate, duration_seconds]
     """
+    results = []
+    
     try:
-        logger.info("Processing inference request...")
+        logger.info(f"Processing mini batch with {len(mini_batch)} files...")
         
-        # Parse input
-        data = json.loads(raw_data)
-        prompt = data.get("prompt", "")
-        max_new_tokens = data.get("max_new_tokens", 256)
-        temperature = data.get("temperature", 1.0)
-        top_k = data.get("top_k", 250)
-        top_p = data.get("top_p", 0.0)
-        guidance_scale = data.get("guidance_scale", 3.0)
-        return_format = data.get("return_format", "base64")
-        
-        logger.info(f"Generating audio for prompt: {prompt}")
-        
-        # Process input
-        inputs = processor(
-            text=[prompt] if prompt else None,
-            padding=True,
-            return_tensors="pt",
-        )
-        
-        # Generate audio
-        with torch.no_grad():
-            audio_values = model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                guidance_scale=guidance_scale,
-            )
-        
-        # Get sample rate
-        sample_rate = model.config.audio_encoder.sampling_rate
-        
-        # Convert to numpy
-        audio_array = audio_values[0, 0].cpu().numpy()
-        
-        # Calculate duration
-        duration = len(audio_array) / sample_rate
-        
-        # Format output based on request
-        if return_format == "base64":
-            # Convert to WAV format and encode as base64
-            wav_buffer = io.BytesIO()
-            scipy.io.wavfile.write(wav_buffer, sample_rate, audio_array)
-            wav_buffer.seek(0)
-            audio_base64 = base64.b64encode(wav_buffer.read()).decode('utf-8')
+        # Process each file in the mini batch
+        for file_path in mini_batch:
+            logger.info(f"Processing file: {file_path}")
             
-            result = {
-                "audio": audio_base64,
-                "sample_rate": sample_rate,
-                "duration_seconds": float(duration),
-                "format": "wav_base64"
-            }
-        else:
-            # Return as array
-            result = {
-                "audio": audio_array.tolist(),
-                "sample_rate": sample_rate,
-                "duration_seconds": float(duration),
-                "format": "array"
-            }
+            # Read JSONL file
+            with open(file_path, 'r') as f:
+                for line_num, line in enumerate(f, 1):
+                    try:
+                        data = json.loads(line.strip())
+                        
+                        prompt = data.get("prompt", "")
+                        max_new_tokens = data.get("max_new_tokens", 256)
+                        temperature = data.get("temperature", 1.0)
+                        top_k = data.get("top_k", 250)
+                        top_p = data.get("top_p", 0.0)
+                        guidance_scale = data.get("guidance_scale", 3.0)
+                        
+                        logger.info(f"Line {line_num}: Generating audio for prompt: {prompt}")
+                        
+                        # Process input
+                        inputs = processor(
+                            text=[prompt] if prompt else None,
+                            padding=True,
+                            return_tensors="pt",
+                        )
+                        
+                        # Generate audio
+                        with torch.no_grad():
+                            audio_values = model.generate(
+                                **inputs,
+                                max_new_tokens=max_new_tokens,
+                                do_sample=True,
+                                temperature=temperature,
+                                top_k=top_k,
+                                top_p=top_p,
+                                guidance_scale=guidance_scale,
+                            )
+                        
+                        # Get sample rate
+                        sample_rate = model.config.audio_encoder.sampling_rate
+                        
+                        # Convert to numpy
+                        audio_array = audio_values[0, 0].cpu().numpy()
+                        
+                        # Calculate duration
+                        duration = len(audio_array) / sample_rate
+                        
+                        # Convert to WAV format and encode as base64
+                        wav_buffer = io.BytesIO()
+                        scipy.io.wavfile.write(wav_buffer, sample_rate, audio_array)
+                        wav_buffer.seek(0)
+                        audio_base64 = base64.b64encode(wav_buffer.read()).decode('utf-8')
+                        
+                        results.append({
+                            "prompt": prompt,
+                            "audio_base64": audio_base64,
+                            "sample_rate": sample_rate,
+                            "duration_seconds": float(duration),
+                            "status": "success"
+                        })
+                        
+                        logger.info(f"Line {line_num}: Generated {duration:.2f}s of audio")
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing line {line_num}: {str(e)}")
+                        results.append({
+                            "prompt": data.get("prompt", "") if 'data' in locals() else "",
+                            "audio_base64": "",
+                            "sample_rate": 0,
+                            "duration_seconds": 0.0,
+                            "status": f"error: {str(e)}"
+                        })
         
-        logger.info(f"Generated audio: {duration:.2f} seconds")
-        return json.dumps(result)
+        logger.info(f"Batch processing complete. Processed {len(results)} requests")
+        return pd.DataFrame(results)
         
     except Exception as e:
-        error_message = f"Error during inference: {str(e)}"
-        logger.error(error_message, exc_info=True)
-        return json.dumps({"error": error_message})
+        logger.error(f"Error during batch inference: {str(e)}")
+        # Return error as DataFrame
+        return pd.DataFrame([{
+            "prompt": "",
+            "audio_base64": "",
+            "sample_rate": 0,
+            "duration_seconds": 0.0,
+            "status": f"error: {str(e)}"
+        }])

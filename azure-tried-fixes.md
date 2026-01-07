@@ -92,6 +92,91 @@ model.load_state_dict(state_dict, strict=False)
 
 ---
 
+### Error #12: Batch Inference Script Type Mismatch
+```
+ValueError: The run() method in the entry script accepts and should return a list or a pandas DataFrame. 
+The actual type of output '{"error": "Error during inference: the JSON object must be str, bytes or bytearray, not MiniBatch"}' is str.
+```
+
+**Root Cause**:
+- score.py was written for **online endpoints** (receives JSON string, returns JSON string)
+- **Batch endpoints** work differently:
+  - `run()` receives a list of file paths (MiniBatch object)
+  - Must return pandas DataFrame or list, NOT a string
+  - Reads JSONL files from storage, not raw JSON
+
+**Fix Applied**:
+1. Rewrote `run(mini_batch)` function to handle batch inference:
+   - Accept list of file paths instead of raw JSON
+   - Read JSONL files from each path
+   - Process each line as separate inference request
+   - Return pandas DataFrame with columns: [prompt, audio_base64, sample_rate, duration_seconds, status]
+2. Added pandas import to handle DataFrame output
+3. Proper error handling that returns DataFrame even on errors
+
+**Code Changes**:
+```python
+# OLD (Online endpoint):
+def run(raw_data):
+    data = json.loads(raw_data)  # Parse JSON string
+    # ...
+    return json.dumps(result)  # Return JSON string
+
+# NEW (Batch endpoint):
+def run(mini_batch):  # mini_batch is list of file paths
+    results = []
+    for file_path in mini_batch:
+        with open(file_path, 'r') as f:
+            for line in f:
+                data = json.loads(line)
+                # ... process ...
+                results.append({...})
+    return pd.DataFrame(results)  # Return DataFrame
+```
+
+**Status**: ✅ FIXED - Rewritten for batch inference pattern
+
+---
+
+### Error #13: Missing pandas Package
+```
+EntryScriptException: No module named 'pandas'
+```
+
+**Root Cause**: 
+- Batch inference run() function returns pandas DataFrame
+- pandas was not included in deployment/conda_inference.yml
+
+**Fix Applied**:
+- Added `pandas>=1.5.0` to deployment/conda_inference.yml
+- Created environment v4
+- Updated batch-deployment.yml to use v4
+
+**Status**: ✅ FIXED - Environment v4 deployed with pandas
+
+---
+
+### Error #14: Invalid JSONL Format
+```
+ERROR:score_module:Error processing line 1: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+```
+
+**Root Cause**:
+- input_data.jsonl had Python dict format with single quotes: `{'prompt': 'text'}`
+- JSON requires double quotes: `{"prompt": "text"}`
+- Also had trailing commas which are invalid in JSON
+
+**Fix Applied**:
+- Fixed input_data.jsonl to use proper JSON format
+- Changed `'` to `"`
+- Removed trailing commas
+
+**Note**: The "No safetensors found" warning is expected - we registered the base model, not a fine-tuned one. The system will use the base facebook/musicgen-small model for inference.
+
+**Status**: ✅ FIXED - input_data.jsonl corrected to valid JSON
+
+---
+
 ### Error #6: Azure ML Batch Inference - Missing azureml-core SDK
 ```
 ModuleNotFoundError: No module named 'azureml'
