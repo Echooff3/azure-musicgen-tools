@@ -61,7 +61,9 @@ def main():
         
         # Read predictions
         if predictions_file.endswith('.csv'):
-            df = pd.read_csv(predictions_file)
+            # Azure ML batch outputs are space-separated with quoted fields
+            df = pd.read_csv(predictions_file, sep=' ', header=None, 
+                           names=['prompt', 'audio_base64', 'sample_rate', 'duration_seconds', 'status'])
         else:
             df = pd.read_parquet(predictions_file)
         
