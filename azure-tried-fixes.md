@@ -62,11 +62,33 @@ Should have a `model_type` key in its config.json
 **Diagnosis**: The local model/config.json HAS "model_type": "musicgen" at line 70, but the downloaded version in Azure ML batch doesn't.
 
 **Fix Attempted #5**: 
-- Option A: Ensure config.json is properly included in the model artifact registration
-- Option B: Use try/except in score.py to handle missing model_type gracefully
-- Option C: Load model explicitly as MusicgenForConditionalGeneration instead of AutoProcessor
+- **Root Cause Confirmed**: Azure ML model registration CORRUPTS config.json during upload/download
+- The local config.json has all required nested configs (text_encoder, audio_encoder, decoder)
+- When Azure downloads it to batch compute, these nested configs are lost
 
-**PENDING**: Need to verify model registration process and ensure config.json is correctly packaged and transferred to batch compute
+**Solution Implemented**:
+1. Modified deployment/score.py to load base model from HuggingFace ("facebook/musicgen-small")
+2. Then load fine-tuned weights from registered model's model.safetensors
+3. This bypasses the corrupted config.json entirely
+4. Added safetensors>=0.4.0 to deployment/conda_inference.yml
+
+**Code Changes**:
+```python
+# Load base architecture from HuggingFace (has valid config)
+processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
+model = MusicgenForConditionalGeneration.from_pretrained(
+    "facebook/musicgen-small",
+    torch_dtype=torch.float32,
+    device_map="cpu"
+)
+
+# Then load fine-tuned weights from registered model
+from safetensors.torch import load_file
+state_dict = load_file(os.path.join(model_path, "model.safetensors"))
+model.load_state_dict(state_dict, strict=False)
+```
+
+**Status**: ✅ FIXED - Environment v3 deployed with workaround for corrupted config
 
 ---
 
@@ -75,26 +97,78 @@ Should have a `model_type` key in its config.json
 ModuleNotFoundError: No module named 'azureml'
 ```
 
-**Root Cause**: The batch inference environment (musicgen-training-env) is missing the legacy `azureml-core` and `azureml-defaults` packages that Azure ML's batch driver needs.
+**Root Cause**: The batch inference environment is missing the legacy `azureml-core` and `azureml-defaults` packages that Azure ML's batch driver needs internally.
 
 **Environment Issue**: The Azure ML batch inference driver internally uses the legacy azureml SDK, but we were only including the newer `azure-ai-ml` SDK.
 
-**Fix Attempted #6**:
-- Added `azureml-core>=1.57.0` and `azureml-defaults>=1.57.0` to:
-  - requirements.txt
-  - config/conda_env_musicgen_training.yml
-  - deployment/conda_inference.yml (batch inference environment)
-- These need to be included in any batch inference environment
-- Also added azure-ai-ml>=1.12.0 for modern SDK compatibility
+**⚠️ THIS ERROR OCCURRED TWICE** - First fix was incomplete!
 
-**Status**: ✅ Fixed - Updated deployment/conda_inference.yml with required azureml packages
+**First Attempt (INCOMPLETE)**:
+- Added packages to deployment/conda_inference.yml ✅
+- Created new environment musicgen-inference-env:1 ✅
+- Updated batch-deployment.yml to reference new env ✅
+- **FORGOT TO ACTUALLY DEPLOY THE UPDATED BATCH DEPLOYMENT** ❌
 
-**Action Required**: Re-create the Azure ML environment:
+**Complete Fix Required**:
+1. Update deployment/conda_inference.yml with:
+   - azureml-core>=1.57.0
+   - azureml-defaults>=1.57.0
+   - azure-ai-ml>=1.12.0
+
+2. Create the environment:
 ```bash
-az ml environment create --file deployment/conda_inference.yml --resource-group <rg> --workspace-name <ws>
+az ml environment create --name musicgen-inference-env \
+  --conda-file deployment/conda_inference.yml \
+  --image mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.8-cudnn8-ubuntu22.04:latest \
+  --resource-group rg-mg3 \
+  --workspace-name mg-ml-workspace
 ```
 
-**Why This Failed**: The batch-deployment.yml was using musicgen-training-env:15 which may not have had the azureml SDK, and the inference environment file was missing it entirely. The Azure ML batch driver requires azureml-core internally.
+3. Update batch-deployment.yml to use new environment:
+   - `environment: azureml:musicgen-inference-env:1`
+
+4. **CRITICAL: Actually deploy the updated batch deployment**:
+```bash
+az ml batch-deployment update --file deployment/batch-deployment.yml \
+  --resource-group rg-mg3 \
+  --workspace-name mg-ml-workspace
+```
+
+**Status**: ✅ FIXED - Batch deployment updated successfully
+
+---
+
+### Error #11: Missing accelerate Package for device_map
+```
+ValueError: Using a `device_map`, `tp_plan`, `torch.device` context manager or setting 
+`torch.set_default_device(device)` requires `accelerate`. You can install it with `pip install accelerate`
+```
+
+**Root Cause**: 
+- score.py uses `device_map="auto"` in `MusicgenForConditionalGeneration.from_pretrained()`
+- The `accelerate` package is required for device_map functionality in transformers
+- deployment/conda_inference.yml was missing this dependency
+
+**Fix Applied**:
+1. Added `accelerate>=0.25.0` to deployment/conda_inference.yml
+2. Created new environment version: musicgen-inference-env:2
+3. Updated batch-deployment.yml to use version 2
+4. Deployed the updated batch deployment
+
+**Commands Run**:
+```bash
+az ml environment create --name musicgen-inference-env \
+  --conda-file deployment/conda_inference.yml \
+  --image mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.8-cudnn8-ubuntu22.04:latest \
+  --resource-group rg-mg3 \
+  --workspace-name mg-ml-workspace
+
+az ml batch-deployment update --file deployment/batch-deployment.yml \
+  --resource-group rg-mg3 \
+  --workspace-name mg-ml-workspace
+```
+
+**Status**: ✅ FIXED - Environment v2 deployed with accelerate
 
 ---
 

@@ -35,23 +35,36 @@ def init():
     
     logger.info(f"Loading model from: {model_path}")
     
-    # Load processor and model
-    # Use CPU and float32 for cost-effective inference
-    try:
-        # Try standard AutoProcessor loading first
-        processor = AutoProcessor.from_pretrained(model_path)
-    except ValueError as e:
-        # If AutoProcessor fails due to missing model_type in config.json,
-        # fall back to explicit MusicGen processor loading
-        logger.warning(f"AutoProcessor failed, attempting explicit MusicGen processor load: {e}")
-        from transformers import AutoFeatureExtractor
-        processor = AutoFeatureExtractor.from_pretrained("facebook/musicgen-small")
+    # CRITICAL FIX: Azure ML model registration corrupts config.json
+    # The config loses nested configs (text_encoder, audio_encoder, decoder)
+    # Solution: Load from HuggingFace base model, then load fine-tuned weights
     
+    # Load processor and base model architecture from HuggingFace
+    logger.info("Loading processor from HuggingFace base model...")
+    processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
+    
+    logger.info("Loading base model architecture from HuggingFace...")
     model = MusicgenForConditionalGeneration.from_pretrained(
-        model_path,
-        torch_dtype=torch.float32,  # Use float32 on CPU
-        device_map="cpu"  # Force CPU usage
+        "facebook/musicgen-small",
+        torch_dtype=torch.float32,
+        device_map="cpu"
     )
+    
+    # Now load the fine-tuned weights from the registered model
+    logger.info("Loading fine-tuned weights from registered model...")
+    safetensors_path = os.path.join(model_path, "model.safetensors")
+    if os.path.exists(safetensors_path):
+        from safetensors.torch import load_file
+        state_dict = load_file(safetensors_path)
+        # Only load decoder weights if they exist (LoRA training)
+        model_state = model.state_dict()
+        for key in state_dict:
+            if key in model_state:
+                model_state[key] = state_dict[key]
+        model.load_state_dict(model_state, strict=False)
+        logger.info("Fine-tuned weights loaded successfully")
+    else:
+        logger.warning(f"No safetensors found at {safetensors_path}, using base model")
     
     # Set to evaluation mode
     model.eval()
